@@ -1,0 +1,11 @@
+[package]
+name = "grio-cli"
+version.workspace = true
+edition.workspace = true
+description = "CLI tool and project scaffolder for grio applications"
+
+[[bin]]
+name = "grio"
+path = "src/main.rs"
+
+[dependencies]

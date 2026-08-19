@@ -1,0 +1,1988 @@
+/* grio — moteur frontend (vanilla JS, zéro dépendance) */
+(function () {
+  'use strict';
+
+  /* ---------- core ---------- */
+
+  const registry = {};
+  const byId = {};
+
+  let ws = null;
+  let ready = false;
+  let pending = [];
+  let retry = 1;
+  let runButton = null;
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  function inputsSnapshot() {
+    const v = {};
+    for (const k in byId) {
+      const c = byId[k];
+      if (c.input && c.getValue) v[c.id] = c.getValue();
+    }
+    return v;
+  }
+
+  function emit(c, name, data) {
+    send({ t: 'event', c: c.id, e: name, d: data ?? null, v: inputsSnapshot() });
+  }
+
+  function send(payload) {
+    const raw = JSON.stringify(payload);
+    if (ready) ws.send(raw);
+    else pending.push(raw);
+  }
+
+  function flash(el) {
+    el.classList.remove('mg-flash');
+    void el.offsetWidth;
+    el.classList.add('mg-flash');
+  }
+
+  function toast(msg, level) {
+    const t = document.createElement('div');
+    t.className = 'mg-toast' + (level ? ' mg-toast-' + level : '');
+    t.textContent = msg;
+    t.dataset.level = level || 'error';
+    document.body.appendChild(t);
+    setTimeout(() => {
+      t.classList.add('out');
+      setTimeout(() => t.remove(), 360);
+    }, 3200);
+  }
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    ws = new WebSocket(proto + location.host + '/ws');
+
+    ws.onopen = () => {
+      ready = true;
+      retry = 1;
+      const p = pending;
+      pending = [];
+      p.forEach((s) => ws.send(s));
+      send({ t: 'event', c: '', e: 'load', d: null, v: {} });
+    };
+
+    ws.onmessage = (ev) => {
+      let m;
+      try { m = JSON.parse(ev.data); } catch { return; }
+      if (m.t === 'update') {
+        (m.u || []).forEach((u) => {
+          const c = byId[u.id];
+          if (c && c.apply) { c.apply(u.p || {}); flash(c.el); }
+        });
+      } else if (m.t === 'alert') {
+        toast(m.m || '—', m.level || 'info');
+      } else if (m.t === 'error') {
+        toast(m.m || 'Erreur', 'error');
+      }
+    };
+
+    ws.onclose = () => {
+      ready = false;
+      setTimeout(connect, Math.min(1000 * retry++, 15000));
+    };
+
+    ws.onerror = () => ws.close();
+  }
+
+  function register(kind, impl) { registry[kind] = impl; }
+
+  function applyLayout(el, props) {
+    const L = props.layout;
+    if (!L) return;
+    const st = el.style;
+    if (L.scale) { st.flexGrow = L.scale; st.flexBasis = '0%'; }
+    if (L.width) st.width = L.width + 'px';
+    if (L.height) st.height = L.height + 'px';
+    if (L.min_width) st.minWidth = L.min_width + 'px';
+  }
+
+  function mount(el) {
+    const kind = el.dataset.kind;
+    const props = JSON.parse(el.dataset.props || '{}');
+    if (kind === 'row' || kind === 'column' || kind === 'grid' || kind === 'panel' || kind === 'accordion') {
+      if (typeof props.gap === 'number') el.style.setProperty('--mg-gap', props.gap + 'px');
+      if (typeof props.gap_x === 'number') el.style.setProperty('--mg-gap-x', props.gap_x + 'px');
+      if (typeof props.gap_y === 'number') el.style.setProperty('--mg-gap-y', props.gap_y + 'px');
+      if (props.columns) el.style.setProperty('--mg-grid-cols', props.columns);
+      if (props.wrap === false) el.style.setProperty('--mg-wrap', 'nowrap');
+      if (props.align) el.style.setProperty('--mg-align', props.align);
+      if (props.justify) el.style.setProperty('--mg-justify', props.justify);
+      applyLayout(el, props);
+      return;
+    }
+    const impl = registry[kind];
+    if (!impl) {
+      el.innerHTML = '<span class="mg-unknown">unknown component: ' + esc(kind) + '</span>';
+      return;
+    }
+    const c = { kind, id: el.dataset.id, props, el, input: el.dataset.role === 'input' };
+    byId[c.id] = c;
+    impl.mount(c);
+    applyLayout(el, props);
+  }
+
+  /* ---------- markdown mini ---------- */
+
+  function inline(s) {
+    let t = esc(s);
+    t = t.replace(/`([^`]+)`/g, (_, x) => '<code class="mg-code-inline">' + x + '</code>');
+    t = t.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    t = t.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    t = t.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
+    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    return t;
+  }
+
+  function markdown(src) {
+    const codes = [];
+    let s = String(src || '');
+    s = s.replace(/```([\s\S]*?)```/g, (_, b) => {
+      const token = '__MGCODE_' + codes.length + '__';
+      codes.push('<pre class="mg-code"><code>' + esc(b) + '</code></pre>');
+      return token;
+    });
+    const lines = s.split('\n').map((line) => {
+      line = line.trim();
+      if (/^#{1,6}\s/.test(line)) {
+        const n = line.match(/^#+/)[0].length;
+        return '<h' + n + '>' + inline(line.replace(/^#+\s/, '')) + '</h' + n + '>';
+      }
+      if (/^>\s?/.test(line)) return '<blockquote>' + inline(line.replace(/^>\s?/, '')) + '</blockquote>';
+      if (/^[-*]\s/.test(line)) return '<li>' + inline(line.replace(/^[-*]\s/, '')) + '</li>';
+      if (/^\d+\.\s/.test(line)) return '<li>' + inline(line.replace(/^\d+\.\s/, '')) + '</li>';
+      if (/^\s*-{3,}\s*$/.test(line)) return '<hr>';
+      return inline(line);
+    }).join('\n');
+    return lines.replace(/__MGCODE_\d+__/g, () => codes.shift());
+  }
+
+  /* ---------- composants ---------- */
+
+  register('text', {
+    mount(c) {
+      const p = c.props;
+      const id = 'f_' + c.id;
+      const ph = p.placeholder ? 'placeholder="' + esc(p.placeholder) + '"' : '';
+      const isMulti = p.lines && p.lines > 1;
+      const inputHtml = isMulti
+        ? '<textarea id="' + id + '" class="mg-input" rows="' + p.lines + '" ' + ph + '>' + esc(p.value ?? '') + '</textarea>'
+        : '<input id="' + id + '" class="mg-input" type="text" value="' + esc(p.value ?? '') + '" ' + ph + ' autocomplete="off">';
+      c.el.innerHTML =
+        '<label class="mg-label" for="' + id + '"><span>' + esc(p.label || c.id) + '</span></label>' + inputHtml;
+      const input = c.el.querySelector('.mg-input');
+      if (p.interactive === false) { input.disabled = true; c.el.classList.add('mg-disabled'); }
+      input.addEventListener('input', () => emit(c, 'change', input.value));
+      c.getValue = () => input.value;
+      c.apply = (patch) => {
+        if (patch.value != null && String(input.value) !== String(patch.value)) input.value = patch.value;
+      };
+    }
+  });
+
+  register('slider', {
+    mount(c) {
+      const p = c.props;
+      const id = 'f_' + c.id;
+      c.el.innerHTML =
+        '<div class="mg-label"><span>' + esc(p.label || c.id) + '</span>' +
+        '<span class="mg-slider-value"></span></div>' +
+        '<input id="' + id + '" class="mg-range" type="range" min="' + p.min + '" max="' + p.max +
+        '" step="' + p.step + '" value="' + p.value + '">';
+      const range = c.el.querySelector('input');
+      const val = c.el.querySelector('.mg-slider-value');
+      val.textContent = range.value;
+      if (p.interactive === false) { range.disabled = true; c.el.classList.add('mg-disabled'); }
+      range.addEventListener('input', () => {
+        val.textContent = range.value;
+        emit(c, 'change', parseFloat(range.value));
+      });
+      c.getValue = () => parseFloat(range.value);
+      c.apply = (patch) => {
+        if (patch.value != null) { range.value = patch.value; val.textContent = range.value; }
+      };
+    }
+  });
+
+  register('output', {
+    mount(c) {
+      const p = c.props;
+      c.el.innerHTML =
+        '<div class="mg-card mg-output">' +
+        '<div class="mg-card-label">' + esc(p.label || c.id) + '</div>' +
+        '<div class="mg-output-text"></div></div>';
+      const out = c.el.querySelector('.mg-output-text');
+      out.textContent = p.value ?? '';
+      c.apply = (patch) => {
+        if (patch.value != null) out.textContent = patch.value;
+        if (patch.append != null) out.textContent = String(out.textContent) + String(patch.append);
+        if (patch.label != null) {
+          const lbl = c.el.querySelector('.mg-card-label');
+          if (lbl) lbl.textContent = patch.label;
+        }
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+        if (patch.disabled != null) c.el.classList.toggle('mg-disabled', !!patch.disabled);
+      };
+    }
+  });
+
+  register('progress', {
+    mount(c) {
+      const p = c.props;
+      c.el.innerHTML =
+        '<div class="mg-label"><span>' + esc(p.label || c.id) + '</span>' +
+        '<span class="mg-progress-value">0%</span></div>' +
+        '<div class="mg-progress-track"><div class="mg-progress-bar" style="width:0%"></div></div>' +
+        '<div class="mg-progress-label"></div>';
+      c.apply = (patch) => {
+        if (patch.value == null) return;
+        const raw = patch.value;
+        const f = typeof raw === 'number' ? raw : (raw.progress ?? 0);
+        const label = typeof raw === 'object' && raw != null ? (raw.label ?? '') : '';
+        const pct = Math.max(0, Math.min(100, Math.round(f * 100)));
+        const bar = c.el.querySelector('.mg-progress-bar');
+        const val = c.el.querySelector('.mg-progress-value');
+        const lab = c.el.querySelector('.mg-progress-label');
+        bar.style.width = pct + '%';
+        bar.classList.toggle('done', pct >= 100);
+        val.textContent = pct + '%';
+        lab.textContent = label != null ? String(label) : '';
+      };
+    }
+  });
+
+  register('markdown', {
+    mount(c) {
+      const div = document.createElement('div');
+      div.className = 'mg-markdown';
+      div.innerHTML = markdown(c.props.text);
+      c.el.appendChild(div);
+      c.apply = (patch) => {
+        if (patch.value != null) div.innerHTML = markdown(patch.value);
+      };
+    }
+  });
+
+  /* ---------- média ---------- */
+
+  function dataUrl(v) { return typeof v === 'string' && v.length ? v : ''; }
+
+  function makeLabel(p, c) {
+    return '<div class="mg-label"><span>' + esc(p.label || c.id) + '</span></div>';
+  }
+
+  function readFile(file, done) {
+    const r = new FileReader();
+    r.onload = () => done(String(r.result));
+    r.readAsDataURL(file);
+  }
+
+  function sendStream(c, blob) {
+    const r = new FileReader();
+    r.onload = () => {
+      const b64 = String(r.result).split(',')[1] || '';
+      send({ t: 'stream', c: c.id, p: { mime: blob.type || 'application/octet-stream', b64 } });
+    };
+    r.readAsDataURL(blob);
+  }
+
+  function wireUpload(box, onData) {
+    box.addEventListener('click', () => {
+      const f = box.querySelector('input[type=file]');
+      if (f) f.click();
+    });
+    const input = box.querySelector('input[type=file]');
+    input.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      readFile(file, onData);
+    });
+  }
+
+  function playerButtons(c) {
+    const wrap = document.createElement('div');
+    wrap.className = 'mg-media-controls';
+    ['play', 'pause', 'stop'].forEach((name) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mg-btn mg-btn-secondary mg-media-btn';
+      b.textContent = name;
+      b.addEventListener('click', () => emit(c, name, null));
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+
+  register('image', {
+    mount(c) {
+      const p = c.props;
+      const interactive = p.interactive !== false;
+      const box = document.createElement('div');
+      box.className = 'mg-media-box' + (interactive ? ' mg-media-drop' : '');
+      const img = document.createElement('img');
+      img.className = 'mg-media-img';
+      img.alt = '';
+      const src0 = dataUrl(p.value);
+      img.src = src0 || 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+      if (!src0) img.classList.add('mg-media-empty');
+      const file = interactive ? '<input type="file" accept="image/*" hidden>' : '';
+      box.innerHTML = file;
+      box.appendChild(img);
+      const holder = document.createElement('div');
+      holder.className = 'mg-media';
+      holder.innerHTML = makeLabel(p, c) + (c.input ? '<div class="mg-hint">clic ou glisse une image</div>' : '');
+      holder.appendChild(box);
+      c.el.appendChild(holder);
+
+      c.getValue = () => (img.classList.contains('mg-media-empty') ? '' : img.src);
+      c.apply = (patch) => {
+        if (patch.value != null && dataUrl(patch.value)) {
+          img.src = patch.value;
+          img.classList.remove('mg-media-empty');
+        }
+      };
+
+      if (!interactive) return;
+      wireUpload(box, (url) => {
+        img.src = url;
+        img.classList.remove('mg-media-empty');
+        emit(c, 'change', url);
+      });
+      box.addEventListener('dragover', (e) => { e.preventDefault(); box.classList.add('hover'); });
+      box.addEventListener('dragleave', () => box.classList.remove('hover'));
+      box.addEventListener('drop', (e) => {
+        e.preventDefault();
+        box.classList.remove('hover');
+        const f = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) readFile(f, (url) => { img.src = url; emit(c, 'change', url); });
+      });
+    }
+  });
+
+  register('imageeditor', {
+    mount(c) {
+      const p = c.props;
+      const interactive = p.interactive !== false;
+      const nLayers = Math.max(1, Math.min(4, p.layers || 2));
+      const dab = (s, v) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'mg-btn mg-btn-secondary mg-ie-tool'; b.textContent = s; if (v) b.dataset.v = v; return b; };
+
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-ie';
+      wrap.innerHTML = makeLabel(p, c);
+      c.el.appendChild(wrap);
+
+      let bg = null, BGW = 900, BGH = 600;
+      const layers = []; // { cv, ctx, visible, opacity }
+      const mkLayer = (w, h) => {
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        return { cv, ctx: cv.getContext('2d'), visible: true, opacity: 1 };
+      };
+      const visibleComp = () => {
+        const cv = document.createElement('canvas');
+        cv.width = BGW; cv.height = BGH;
+        const g = cv.getContext('2d');
+        if (bg) g.drawImage(bg, 0, 0);
+        layers.forEach((l) => { if (l.visible) { g.globalAlpha = l.opacity; g.drawImage(l.cv, 0, 0); g.globalAlpha = 1; } });
+        return cv;
+      };
+      const mask = () => {
+        const cv = document.createElement('canvas');
+        cv.width = BGW; cv.height = BGH;
+        const g = cv.getContext('2d');
+        g.fillStyle = '#000'; g.fillRect(0, 0, BGW, BGH);
+        layers.forEach((l) => {
+          g.drawImage(l.cv, 0, 0);
+          g.globalCompositeOperation = 'source-in';
+          g.fillStyle = '#fff'; g.fillRect(0, 0, BGW, BGH);
+          g.globalCompositeOperation = 'source-over';
+        });
+        return cv;
+      };
+      const snapshot = () => ({ bg: bg ? bg.getContext('2d').getImageData(0, 0, BGW, BGH) : null, layers: layers.map((l) => l.ctx.getImageData(0, 0, BGW, BGH)), w: BGW, h: BGH });
+      const history = []; let hIndex = -1;
+      const pushHistory = () => { history.splice(hIndex + 1); history.push(snapshot()); if (history.length > 20) history.shift(); hIndex = history.length - 1; };
+      const restore = (s) => {
+        BGW = s.w; BGH = s.h;
+        bg = document.createElement('canvas'); bg.width = BGW; bg.height = BGH;
+        if (s.bg) bg.getContext('2d').putImageData(s.bg, 0, 0);
+        layers.splice(0, layers.length);
+        for (let i = 0; i < s.layers.length; i++) {
+          layers.push(mkLayer(BGW, BGH));
+          layers[i].ctx.putImageData(s.layers[i], 0, 0);
+        }
+      };
+      const redo = (ev) => { if (hIndex + 1 >= history.length) return; restore(history[++hIndex]); draw(); commit(); };
+      const undo = (ev) => { if (hIndex < 0) return; hIndex--; restore(hIndex >= 0 ? history[hIndex] : snapshotBlank()); draw(); commit(); };
+      const snapshotBlank = () => { const c0 = document.createElement('canvas'); c0.width = BGW; c0.height = BGH; return { bg: null, layers: layers.map(() => { const c1 = document.createElement('canvas'); c1.width = BGW; c1.height = BGH; return c1.getContext('2d').createImageData(BGW, BGH); }), w: BGW, h: BGH }; };
+
+      const view = document.createElement('canvas');
+      view.className = 'mg-ie-canvas';
+      const vctx = view.getContext('2d');
+      const ovl = document.createElement('canvas');
+      ovl.className = 'mg-ie-canvas mg-ie-ovl';
+      const octx = ovl.getContext('2d');
+      const stage = document.createElement('div');
+      stage.className = 'mg-ie-stage';
+      stage.appendChild(view); stage.appendChild(ovl);
+
+      let zoom = 1, tx = 0, ty = 0, tool = 'brush', color = '#e11d48', size = 8;
+      let drawing = null;
+      const scaleCv = () => {
+        const w = Math.max(1, Math.round(BGW * zoom)), h = Math.max(1, Math.round(BGH * zoom));
+        view.width = w; view.height = h; view.style.width = w + 'px'; view.style.height = h + 'px';
+        ovl.width = w; ovl.height = h; ovl.style.width = w + 'px'; ovl.style.height = h + 'px';
+      };
+      const fit = () => {
+        const availW = stage.clientWidth - 4, availH = Math.max(120, stage.clientHeight - 4);
+        zoom = Math.min(availW / BGW, availH / BGH, 4);
+        zoom = Math.max(zoom, 0.05);
+        tx = (availW - BGW * zoom) / 2; ty = (availH - BGH * zoom) / 2;
+        scaleCv();
+      };
+      const draw = () => {
+        vctx.setTransform(1, 0, 0, 1, 0, 0);
+        vctx.clearRect(0, 0, view.width, view.height);
+        const g = vctx;
+        if (bg) { g.drawImage(bg, tx, ty, BGW * zoom, BGH * zoom); }
+        layers.forEach((l) => {
+          if (!l.visible) return;
+          g.globalAlpha = l.opacity;
+          g.drawImage(l.cv, tx, ty, BGW * zoom, BGH * zoom);
+          g.globalAlpha = 1;
+        });
+      };
+      const clearOvl = () => { octx.setTransform(1, 0, 0, 1, 0, 0); octx.clearRect(0, 0, ovl.width, ovl.height); };
+      const toImg = (ev) => {
+        const r = ovl.getBoundingClientRect();
+        return { x: (ev.clientX - r.left - tx) / zoom, y: (ev.clientY - r.top - ty) / zoom };
+      };
+
+      const commit = () => {
+        if (!interactive) return;
+        const img = visibleComp(), mk = mask();
+        emit(c, 'change', {
+          image: img.toDataURL('image/png'),
+          layers: layers.map((l) => l.cv.toDataURL('image/png')),
+          mask: mk.toDataURL('image/png'),
+        });
+      };
+      c.getValue = () => ({ image: visibleComp().toDataURL('image/png'), layers: layers.map((l) => l.cv.toDataURL('image/png')), mask: mask().toDataURL('image/png') });
+      c.apply = (patch) => {
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+        if (patch.value != null && dataUrl(patch.value) && dataUrl(patch.value) !== bgSrc) {
+          loadBg(dataUrl(patch.value));
+        }
+      };
+      let bgSrc = '';
+
+      const px = (fn) => {
+        if (!bg) return;
+        const g = bg.getContext('2d');
+        const d = g.getImageData(0, 0, BGW, BGH);
+        for (let i = 0; i < d.data.length; i += 4) fn(i, d.data);
+        g.putImageData(d, 0, 0);
+      };
+      const gray = () => { px((i, d) => { const v = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; d[i] = d[i + 1] = d[i + 2] = v; }); };
+      const invert = () => { px((i, d) => { d[i] = 255 - d[i]; d[i + 1] = 255 - d[i + 1]; d[i + 2] = 255 - d[i + 2]; }); };
+      const level = (k) => { px((i, d) => { d[i] = Math.min(255, d[i] * k); d[i + 1] = Math.min(255, d[i + 1] * k); d[i + 2] = Math.min(255, d[i + 2] * k); }); };
+      const blur4 = () => {
+        if (!bg) return;
+        const tmp = document.createElement('canvas');
+        tmp.width = BGW; tmp.height = BGH;
+        const g = tmp.getContext('2d');
+        g.filter = 'blur(5px)'; g.drawImage(bg, 0, 0); g.filter = 'none';
+        bg.getContext('2d').clearRect(0, 0, BGW, BGH);
+        bg.getContext('2d').drawImage(tmp, 0, 0);
+      };
+
+      // --- barre d'outils ---
+      const bar = document.createElement('div');
+      bar.className = 'mg-ie-bar';
+      if (interactive) {
+        const loadUserImage = (url) => { history.length = 0; hIndex = -1; loadBg(url, null, () => commit()); };
+        const fileIn = document.createElement('input');
+        fileIn.type = 'file'; fileIn.accept = 'image/*'; fileIn.hidden = true;
+        fileIn.addEventListener('change', () => {
+          const f = fileIn.files && fileIn.files[0];
+          if (f) readFile(f, loadUserImage);
+          fileIn.value = '';
+        });
+        const open = dab('Ouvrir une image', '-');
+        open.title = 'Charger une image';
+        open.addEventListener('click', () => fileIn.click());
+        bar.appendChild(open);
+        bar.appendChild(fileIn);
+        bar.appendChild(document.createElement('span')).className = 'mg-ie-sep';
+        stage.addEventListener('dragover', (e) => { e.preventDefault(); stage.classList.add('hover'); });
+        stage.addEventListener('dragleave', () => stage.classList.remove('hover'));
+        stage.addEventListener('drop', (e) => {
+          e.preventDefault();
+          stage.classList.remove('hover');
+          const f = e.dataTransfer.files && e.dataTransfer.files[0];
+          if (f && f.type.startsWith('image/')) readFile(f, loadUserImage);
+        });
+        const tools = [];
+        if (p.brush !== false) tools.push(['brush', 'Pinceau', '🖌'], ['eraser', 'Gomme', '⌫']);
+        if (p.shapes !== false) tools.push(['rect', 'Rectangle', '▭'], ['line', 'Ligne', '╱'], ['arrow', 'Flèche', '→']);
+        if (p.crop !== false) tools.push(['crop', 'Rogner', '✂']);
+        tools.push(['pan', 'Déplacer', '✋']);
+        tools.forEach(([id, nm, ic]) => {
+          const b = dab(nm, '-'); b.title = nm; b.dataset.t = id;
+          b.addEventListener('click', () => { tool = id; bar.querySelectorAll('.mg-ie-tool').forEach((x) => x.classList.remove('mg-ie-on')); b.classList.add('mg-ie-on'); });
+          bar.appendChild(b);
+        });
+        bar.appendChild(document.createElement('span')).className = 'mg-ie-sep';
+        const col = document.createElement('input');
+        col.type = 'color'; col.value = color; col.title = 'Couleur';
+        col.addEventListener('input', () => { color = col.value; });
+        bar.appendChild(col);
+        const sz = document.createElement('input');
+        sz.type = 'range'; sz.min = 2; sz.max = 80; sz.value = size; sz.title = 'Épaisseur';
+        sz.addEventListener('input', () => { size = +sz.value; });
+        bar.appendChild(sz);
+        bar.appendChild(document.createElement('span')).className = 'mg-ie-sep';
+        bar.appendChild(dab('↻ Rotation', '-')).addEventListener('click', () => { if (!interactive) return; pushHistory(); rotateBoth(1); draw(); commit(); });
+        const filt = document.createElement('div');
+        filt.className = 'mg-btn mg-btn-secondary mg-ie-tool mg-ie-menuwrap';
+        filt.textContent = 'Filtres';
+        const fmenu = document.createElement('div');
+        fmenu.className = 'mg-ie-menu';
+        fmenu.hidden = true;
+        [['Gris', gray], ['Inverse', invert], ['Clair', () => level(1.35)], ['Sombre', () => level(0.6)], ['Flou', blur4]].forEach(([nm, fn]) => {
+          const b = document.createElement('button'); b.type = 'button'; b.textContent = nm;
+          b.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            fmenu.hidden = true;
+            if (!interactive) return;
+            pushHistory(); fn(); draw(); commit();
+          });
+          fmenu.appendChild(b);
+        });
+        filt.appendChild(fmenu);
+        filt.addEventListener('click', () => { fmenu.hidden = !fmenu.hidden; });
+        bar.appendChild(filt);
+        bar.appendChild(document.createElement('span')).className = 'mg-ie-sep';
+        bar.appendChild(dab('Annuler', '-')).addEventListener('click', undo);
+        bar.appendChild(dab('Rétablir', '-')).addEventListener('click', redo);
+        bar.appendChild(dab('Reset', '-')).addEventListener('click', () => { if (!interactive) return; pushHistory(); loadBg(bgInit || null, true); draw(); commit(); });
+      }
+      wrap.appendChild(bar);
+      wrap.appendChild(stage);
+
+      // --- panneau calques ---
+      const lp = document.createElement('div');
+      lp.className = 'mg-ie-layers';
+      const lpTitle = document.createElement('div');
+      lpTitle.className = 'mg-label';
+      lpTitle.innerHTML = '<span>Calques</span>';
+      lp.appendChild(lpTitle);
+      let sel = 0;
+      const buildLayersUI = () => {
+        lp.querySelectorAll('.mg-ie-layer').forEach((e) => e.remove());
+        layers.forEach((l, i) => {
+          const row = document.createElement('div');
+          row.className = 'mg-ie-layer' + (i === sel ? ' sel' : '');
+          const eye = document.createElement('button');
+          eye.type = 'button'; eye.className = 'mg-btn mg-btn-secondary mg-ico';
+          eye.textContent = l.visible ? '👁' : '—';
+          eye.title = 'Visibilité';
+          eye.addEventListener('click', () => { l.visible = !l.visible; eye.textContent = l.visible ? '👁' : '—'; draw(); commit(); });
+          const name = document.createElement('span');
+          name.textContent = 'Calque ' + (i + 1);
+          const op = document.createElement('input');
+          op.type = 'range'; op.min = 0; op.max = 100; op.value = Math.round(l.opacity * 100);
+          op.addEventListener('input', () => { l.opacity = op.value / 100; draw(); });
+          op.addEventListener('change', () => draw());
+          row.append(eye, name, op);
+          row.addEventListener('click', (ev) => { if (ev.target === op) return; sel = i; buildLayersUI(); });
+          lp.appendChild(row);
+        });
+      };
+      wrap.appendChild(lp);
+      if (!interactive) lp.hidden = true;
+      buildLayersUI();
+
+      // --- pointer ---
+      const pt = (ev) => {
+        const s = toImg(ev);
+        const bounds = { x: 0, y: 0, w: BGW, h: BGH };
+        const inside = s.x >= 0 && s.y >= 0 && s.x < BGW && s.y < BGH;
+        if (tool === 'brush' || tool === 'eraser') {
+          if (ev.type === 'pointerdown') {
+            pushHistory();
+            drawing = { l: layers[sel], pts: [s], mode: tool };
+            beginStroke(drawing, s);
+          } else if (ev.type === 'pointermove' && drawing) {
+            drawing.pts.push(s); drawStroke(drawing, s); draw();
+          } else if (ev.type === 'pointerup' && drawing) {
+            drawing = null; commit();
+          }
+        } else if (tool === 'rect' || tool === 'line' || tool === 'arrow') {
+          if (ev.type === 'pointerdown') { pushHistory(); drawing = { s0: s, tool }; }
+          else if (ev.type === 'pointermove' && drawing) { drawShapeOvl(drawing, s); }
+          else if (ev.type === 'pointerup' && drawing) {
+            clearOvl();
+            drawShapeImage(layers[sel].ctx, drawing.s0, s, drawing.tool, false);
+            drawing = null; draw(); commit();
+          }
+        } else if (tool === 'crop') {
+          if (ev.type === 'pointerdown') { pushHistory(); drawing = { s0: s }; }
+          else if (ev.type === 'pointermove' && drawing) { clearOvl(); drawCrop(drawing, s); }
+          else if (ev.type === 'pointerup' && drawing) {
+            clearOvl(); applyCrop(drawing.s0, s); drawing = null; draw(); commit();
+          }
+        } else if (tool === 'pan') {
+          if (ev.type === 'pointerdown') { drawing = { x: ev.clientX, y: ev.clientY, tx, ty }; }
+          else if (ev.type === 'pointermove' && drawing) { tx = drawing.tx + (ev.clientX - drawing.x); ty = drawing.ty + (ev.clientY - drawing.y); draw(); }
+          else if (ev.type === 'pointerup') drawing = null;
+        }
+      };
+      const beginStroke = (dr, s) => { const g = dr.l.ctx; g.beginPath(); g.moveTo(s.x, s.y); };
+      const drawStroke = (dr, s) => {
+        const g = dr.l.ctx;
+        g.strokeStyle = color; g.lineWidth = size; g.lineCap = 'round'; g.lineJoin = 'round';
+        if (dr.mode === 'eraser') { g.globalCompositeOperation = 'destination-out'; g.strokeStyle = 'rgba(0,0,0,1)'; }
+        g.lineTo(s.x, s.y); g.stroke();
+        if (dr.mode === 'eraser') g.globalCompositeOperation = 'source-over';
+      };
+      const drawShapeImage = (g, s0, s, st, fill) => {
+        g.strokeStyle = color; g.fillStyle = color; g.lineWidth = size; g.lineCap = 'round'; g.lineJoin = 'round';
+        if (st === 'rect') {
+          const x = Math.min(s0.x, s.x), y = Math.min(s0.y, s.y), w = Math.abs(s.x - s0.x), h = Math.abs(s.y - s0.y);
+          if (fill) { g.globalAlpha = 0.35; g.fillRect(x, y, w, h); g.globalAlpha = 1; }
+          g.strokeRect(x, y, w, h);
+        } else {
+          g.beginPath();
+          g.moveTo(s0.x, s0.y);
+          g.lineTo(s.x, s.y);
+          g.stroke();
+          if (st === 'arrow') {
+            const ang = Math.atan2(s.y - s0.y, s.x - s0.x);
+            const hx = Math.max(10, size * 1.6);
+            g.beginPath();
+            g.moveTo(s.x, s.y);
+            g.lineTo(s.x - hx * Math.cos(ang - 0.4), s.y - hx * Math.sin(ang - 0.4));
+            g.moveTo(s.x, s.y);
+            g.lineTo(s.x - hx * Math.cos(ang + 0.4), s.y - hx * Math.sin(ang + 0.4));
+            g.stroke();
+          }
+        }
+      };
+      const drawShapeOvl = (dr, s) => {
+        clearOvl();
+        octx.setTransform(zoom, 0, 0, zoom, tx, ty);
+        octx.globalAlpha = 0.5;
+        drawShapeImage(octx, dr.s0, s, dr.tool, true);
+        octx.globalAlpha = 1;
+        octx.setTransform(1, 0, 0, 1, 0, 0);
+      };
+      const drawCrop = (dr, s) => {
+        clearOvl();
+        octx.setTransform(1, 0, 0, 1, 0, 0);
+        octx.fillStyle = 'rgba(0,0,0,0.45)';
+        octx.fillRect(0, 0, ovl.width, ovl.height);
+        const a = { x: tx + Math.min(dr.s0.x, s.x) * zoom, y: ty + Math.min(dr.s0.y, s.y) * zoom, w: Math.abs(s.x - dr.s0.x) * zoom, h: Math.abs(s.y - dr.s0.y) * zoom };
+        octx.clearRect(a.x, a.y, a.w, a.h);
+        octx.strokeStyle = '#fff'; octx.lineWidth = Math.max(1, zoom);
+        octx.strokeRect(a.x, a.y, a.w, a.h);
+      };
+      const applyCrop = (a, b) => {
+        const x = Math.max(0, Math.min(a.x, b.x)), y = Math.max(0, Math.min(a.y, b.y));
+        const w = Math.max(1, Math.abs(b.x - a.x)), h = Math.max(1, Math.abs(b.y - a.y));
+        const cw = Math.min(w, BGW - x), ch = Math.min(h, BGH - y);
+        const nb = document.createElement('canvas'); nb.width = cw; nb.height = ch;
+        if (bg) nb.getContext('2d').drawImage(bg, -x, -y);
+        const old = layers.slice();
+        layers.splice(0, layers.length);
+        old.forEach((l, i) => {
+          const c2 = document.createElement('canvas'); c2.width = cw; c2.height = ch;
+          c2.getContext('2d').drawImage(l.cv, -x, -y);
+          layers.push({ cv: c2, ctx: c2.getContext('2d'), visible: l.visible, opacity: l.opacity });
+        });
+        bg = nb; BGW = cw; BGH = ch;
+        fit();
+      };
+      const rotateBoth = (dir) => {
+        const rot = (cv) => {
+          const out = document.createElement('canvas');
+          out.width = cv.height; out.height = cv.width;
+          const g = out.getContext('2d');
+          g.translate(out.width, 0); g.rotate(Math.PI / 2);
+          g.drawImage(cv, 0, 0);
+          return out;
+        };
+        if (bg) bg = rot(bg);
+        layers.forEach((l) => { const n = rot(l.cv); l.cv = n; l.ctx = n.getContext('2d'); });
+        const t = BGW; BGW = BGH; BGH = t;
+        fit();
+      };
+
+      ovl.style.pointerEvents = interactive ? 'auto' : 'none';
+      ovl.addEventListener('pointerdown', (ev) => { ovl.setPointerCapture(ev.pointerId); pt(ev); });
+      ovl.addEventListener('pointermove', pt);
+      ovl.addEventListener('pointerup', pt);
+      ovl.addEventListener('wheel', (ev) => {
+        ev.preventDefault();
+        const r = ovl.getBoundingClientRect();
+        const mx = ev.clientX - r.left - tx, my = ev.clientY - r.top - ty;
+        const k = ev.deltaY < 0 ? 1.15 : 1 / 1.15;
+        const nz = Math.min(8, Math.max(0.05, zoom * k));
+        tx = ev.clientX - r.left - mx * (nz / zoom);
+        ty = ev.clientY - r.top - my * (nz / zoom);
+        zoom = nz;
+        scaleCv(); draw(); clearOvl();
+      });
+
+      let bgInit = dataUrl(p.value) || null;
+      const loadBg = (src, force, done) => {
+        const fin = () => { fit(); draw(); buildLayersUI(); if (done) done(); };
+        if (!src) {
+          const c0 = document.createElement('canvas');
+          c0.width = BGW; c0.height = BGH;
+          bg = c0; bgSrc = '';
+          const g = bg.getContext('2d');
+          const grad = g.createLinearGradient(0, 0, BGW, BGH);
+          grad.addColorStop(0, '#eef2ff'); grad.addColorStop(1, '#fdf2f8');
+          g.fillStyle = grad; g.fillRect(0, 0, BGW, BGH);
+          g.fillStyle = 'rgba(99,102,241,0.14)';
+          g.beginPath(); g.arc(BGW * 0.3, BGH * 0.4, BGH * 0.25, 0, Math.PI * 2); g.fill();
+          g.fillStyle = 'rgba(245,158,11,0.16)';
+          g.beginPath(); g.arc(BGW * 0.72, BGH * 0.62, BGH * 0.3, 0, Math.PI * 2); g.fill();
+          fin();
+          return;
+        }
+        const im = new Image();
+        im.onload = () => {
+          let w = im.naturalWidth || 700, h = im.naturalHeight || 400;
+          const s = Math.min(1, 4096 / w, 4096 / h, Math.sqrt(1.6e7 / (w * h)));
+          w = Math.max(1, Math.round(w * s)); h = Math.max(1, Math.round(h * s));
+          BGW = w; BGH = h;
+          bgSrc = src;
+          bg = document.createElement('canvas');
+          bg.width = BGW; bg.height = BGH;
+          bg.getContext('2d').drawImage(im, 0, 0, BGW, BGH);
+          layers.splice(0, layers.length);
+          for (let i = 0; i < nLayers; i++) layers.push(mkLayer(BGW, BGH));
+          fin();
+        };
+        im.onerror = () => toast('Impossible de charger cette image', 'error');
+        im.src = src;
+      };
+
+      loadBg(bgInit);
+      requestAnimationFrame(() => fit());
+      window.addEventListener('resize', fit);
+
+      if (!interactive && bgInit) {
+        // sortie seule : on ne monte que l'image, pas la barre d'outils
+        bar.hidden = true;
+      }
+    }
+  });
+
+  register('audio', {
+    mount(c) {
+      const p = c.props;
+      const holder = document.createElement('div');
+      holder.className = 'mg-media';
+      holder.innerHTML = makeLabel(p, c);
+      c.el.appendChild(holder);
+
+      const audio = document.createElement('audio');
+      audio.className = 'mg-media-player';
+      audio.controls = true;
+      const src0 = dataUrl(p.value);
+      if (src0) audio.src = src0;
+      audio.volume = 0.8;
+      c.getValue = () => audio.src;
+      c.apply = (patch) => {
+        if (patch.value != null && dataUrl(patch.value) && audio.src !== patch.value) {
+          audio.src = patch.value;
+        }
+        if (patch.visible != null) holder.hidden = !patch.visible;
+      };
+
+      if (c.input) {
+        const file = document.createElement('input');
+        file.type = 'file';
+        file.accept = 'audio/*';
+        file.hidden = true;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'mg-btn mg-btn-secondary';
+        btn.textContent = 'Choisir un audio';
+        btn.addEventListener('click', () => file.click());
+        file.addEventListener('change', (e) => {
+          const f = e.target.files && e.target.files[0];
+          if (!f) return;
+          readFile(f, (url) => {
+            audio.src = url;
+            emit(c, 'change', url);
+          });
+        });
+        const row = document.createElement('div');
+        row.className = 'mg-media-actions';
+        row.appendChild(btn);
+        row.appendChild(file);
+        holder.appendChild(row);
+      } else {
+        holder.appendChild(audio);
+        const controls = playerButtons(c);
+        holder.appendChild(controls);
+        if (p.live === true) {
+          let rec = null;
+          const recBtn = document.createElement('button');
+          recBtn.type = 'button';
+          recBtn.className = 'mg-btn mg-btn-primary mg-live-btn';
+          recBtn.textContent = 'Record';
+          recBtn.addEventListener('click', async () => {
+            if (rec) {
+              rec.stop();
+              rec = null;
+              return;
+            }
+            let stream;
+            try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+            catch { toast('micro inaccessible', 'error'); return; }
+            audio.srcObject = stream;
+            audio.play();
+            rec = new MediaRecorder(stream);
+            rec.onstart = () => emit(c, 'play', null);
+            rec.ondataavailable = (e) => { if (e.data && e.data.size) sendStream(c, e.data); };
+            rec.onstop = () => {
+              audio.srcObject = null;
+              emit(c, 'stop', null);
+            };
+            rec.start(500);
+            recBtn.textContent = 'Stop';
+            rec.onstop = () => { recBtn.textContent = 'Record'; };
+          });
+          holder.appendChild(recBtn);
+        }
+      }
+    }
+  });
+
+  register('video', {
+    mount(c) {
+      const p = c.props;
+      const holder = document.createElement('div');
+      holder.className = 'mg-media';
+      holder.innerHTML = makeLabel(p, c);
+      c.el.appendChild(holder);
+
+      const video = document.createElement('video');
+      video.className = 'mg-media-player';
+      video.controls = true;
+      const src0 = dataUrl(p.value);
+      if (src0) video.src = src0;
+      c.getValue = () => video.src;
+      c.apply = (patch) => {
+        if (patch.value != null && dataUrl(patch.value) && video.src !== patch.value) {
+          video.src = patch.value;
+        }
+        if (patch.visible != null) holder.hidden = !patch.visible;
+      };
+
+      if (c.input) {
+        const file = document.createElement('input');
+        file.type = 'file';
+        file.accept = 'video/*';
+        file.hidden = true;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'mg-btn mg-btn-secondary';
+        btn.textContent = 'Choisir une vidéo';
+        btn.addEventListener('click', () => file.click());
+        file.addEventListener('change', (e) => {
+          const f = e.target.files && e.target.files[0];
+          if (!f) return;
+          readFile(f, (url) => {
+            video.src = url;
+            emit(c, 'change', url);
+          });
+        });
+        const row = document.createElement('div');
+        row.className = 'mg-media-actions';
+        row.appendChild(btn);
+        row.appendChild(file);
+        holder.appendChild(row);
+      } else {
+        holder.appendChild(video);
+        holder.appendChild(playerButtons(c));
+        if (p.live === true) {
+          let camRec = null;
+          const camBtn = document.createElement('button');
+          camBtn.type = 'button';
+          camBtn.className = 'mg-btn mg-btn-primary mg-live-btn';
+          camBtn.textContent = 'Camera';
+          camBtn.addEventListener('click', async () => {
+            if (camRec) {
+              camRec.stop();
+              camRec = null;
+              return;
+            }
+            let stream;
+            try { stream = await navigator.mediaDevices.getUserMedia({ video: true }); }
+            catch { toast('caméra inaccessible', 'error'); return; }
+            video.srcObject = stream;
+            video.play();
+            camRec = new MediaRecorder(stream);
+            camRec.onstart = () => emit(c, 'play', null);
+            camRec.ondataavailable = (e) => { if (e.data && e.data.size) sendStream(c, e.data); };
+            camRec.onstop = () => {
+              video.srcObject = null;
+              emit(c, 'stop', null);
+            };
+            camRec.start(1000);
+            camBtn.textContent = 'Stop caméra';
+          });
+          holder.appendChild(camBtn);
+        }
+      }
+    }
+  });
+
+  /* ---------- widgets avancés ---------- */
+
+  const LANGS = {
+    rust: { kw: false, s: /"(?:[^"\\]|\\.)*"/g, c: /(?:\/\/.*$|\/\*[\s\S]*?\*\/)/gm, n: /\b\d[\d_]*(?:\.\d+)?(?:e[+-]?\d+)?\b/g },
+    python: { kw: /\b(?:def|class|return|if|elif|else|for|while|import|from|as|with|try|except|finally|raise|lambda|yield|global|nonlocal|pass|break|continue|None|True|False|async|await|self|print|in|is|not|and|or)\b/g, s: /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, c: /#[^\n]*/g, n: /\b\d[\d_]*(?:\.\d+)?(?:e[+-]?\d+)?\b/g },
+    javascript: { kw: /\b(?:function|return|const|let|var|if|else|for|while|class|new|import|export|from|async|await|try|catch|finally|throw|switch|case|default|break|continue|typeof|instanceof|this|super|null|undefined|true|false|of|in|do)\b/g, s: /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g, c: /(?:\/\/.*$|\/\*[\s\S]*?\*\/)/gm, n: /\b\d[\d_]*(?:\.\d+)?(?:e[+-]?\d+)?\b/g },
+    json: { kw: false, s: /"(?:[^"\\]|\\.)*"/g, c: false, n: /-?\b\d[\d_]*(?:\.\d+)?(?:e[+-]?\d+)?\b/g },
+    markdown: { kw: /(?:^#{1,6}\s)|(?:^\s*[-*+]\s)|(?:^\s*\d+\.\s)|(?:\*\*[^*\n]+\*\*)|(?:`[^`\n]+`)|(?:\[[^\]]+\]\([^)]*\))/gm, s: false, c: false, n: false },
+  };
+  const HIGHLIGHT_RUST_KW = /\b(?:fn|let|mut|pub|struct|enum|impl|trait|match|if|else|for|while|loop|return|use|mod|const|static|async|await|move|ref|where|self|Self|Some|None|Ok|Err|crate|super|dyn|unsafe|type|as|in|break|continue|Box|String|Vec)\b/g;
+  LANGS.rust.kw = HIGHLIGHT_RUST_KW;
+
+  function highlight(src, lang) {
+    const cfg = (lang && LANGS[lang]) || LANGS.rust;
+    const alts = [];
+    const kinds = [];
+    if (cfg.c) { alts.push(cfg.c.source); kinds.push('c'); }
+    if (cfg.s) { alts.push(cfg.s.source); kinds.push('s'); }
+    if (cfg.n) { alts.push(cfg.n.source); kinds.push('n'); }
+    if (cfg.kw) { alts.push(cfg.kw.source); kinds.push('k'); }
+    const rx = new RegExp('(' + kinds.map((_, i) => '(' + alts[i] + ')').join('|') + ')', 'gm');
+    const s = String(src == null ? '' : src);
+    let out = '';
+    let last = 0;
+    let m;
+    while ((m = rx.exec(s)) !== null) {
+      out += esc(s.slice(last, m.index));
+      let kind = 'k';
+      for (let i = 0; i < kinds.length; i++) {
+        if (m[2 + i] !== undefined) { kind = kinds[i]; break; }
+      }
+      out += '<span class="tok-' + kind + '">' + esc(m[0]) + '</span>';
+      last = m.index + m[0].length;
+      if (m[0].length === 0) rx.lastIndex++;
+    }
+    out += esc(s.slice(last));
+    return out;
+  }
+
+  function fmtV(v) {
+    const a = Math.abs(v);
+    if (a >= 1000) return (v / 1000).toFixed(1) + 'k';
+    return (Math.round(v * 100) / 100).toString();
+  }
+
+  function niceStep(rough) {
+    const mag = Math.pow(10, Math.floor(Math.log10(rough || 1)));
+    for (const m of [1, 2, 2.5, 5, 10]) { if (rough <= m * mag) return m * mag; }
+    return 10 * mag;
+  }
+
+  function niceTicks(min, max, count) {
+    const step = niceStep((max - min) / count);
+    const out = [];
+    for (let v = Math.ceil(min / step) * step; v <= max + step * 1e-6; v += step) out.push(v);
+    return out;
+  }
+
+  function fmtTick(v) {
+    const r = Math.round(v * 100) / 100;
+    return Math.abs(r - Math.round(r)) < 1e-9 ? String(Math.round(r)) : String(r);
+  }
+
+  function drawPlot(spec, p) {
+    const type = (spec && spec.variant) || p.variant || 'line';
+    const W = p.width || 480;
+    const H = p.height || 280;
+    const pad = { l: 60, r: 14, t: (p.title ? 26 : 10), b: 30 };
+    const pw = W - pad.l - pad.r;
+    const ph = H - pad.t - pad.b;
+    const labels = (spec && Array.isArray(spec.labels)) ? spec.labels.map(String) : [];
+    const series = (spec && Array.isArray(spec.series)) ? spec.series : [];
+    const cols = (p.colors && p.colors.length) ? p.colors : ['#6366f1'];
+
+    let minV = 0, maxV = 1, maxIdx = 0, hasV = false;
+    series.forEach((s) => {
+      if (type === 'scatter' && Array.isArray(s.points)) {
+        s.points.forEach((pt) => {
+          if (Array.isArray(pt) && pt.length >= 2) {
+            hasV = true;
+            minV = Math.min(minV, Number(pt[1]));
+            maxV = Math.max(maxV, Number(pt[1]));
+            maxIdx = Math.max(maxIdx, Number(pt[0]));
+          }
+        });
+      } else if (Array.isArray(s.data)) {
+        s.data.forEach((v) => {
+          const f = Number(v);
+          if (!isNaN(f)) { hasV = true; minV = Math.min(minV, f); maxV = Math.max(maxV, f); }
+        });
+        maxIdx = Math.max(maxIdx, (s.data.length || 1) - 1);
+      }
+    });
+    if (!hasV) { minV = 0; maxV = 1; }
+    if (minV === maxV) { minV -= 1; maxV += 1; }
+    const yMin = minV >= 0 ? 0 : minV;
+    let yMax = maxV + (maxV - yMin) * 0.08;
+    if (yMax - yMin < 1e-9) yMax = yMin + 1;
+    const span = (yMax - yMin) || 1;
+    const ticks = niceTicks(yMin, yMax, 4);
+    const nX = Math.max(labels.length, maxIdx + 1, 1);
+    // En mode bar, chaque catégorie i dispose d'un slot [pad.l + i*slot, pad.l + (i+1)*slot]
+    // Le centre du slot est à pad.l + (i + 0.5) * slot.
+    // En mode line/scatter classique, le point va de pad.l à pad.l + pw.
+    const slotW = pw / nX;
+    const X = (i) => type === 'bar' ? (pad.l + (i + 0.5) * slotW) : (pad.l + (nX > 1 ? pw * (i / (nX - 1)) : pw / 2));
+    const Y = (v) => pad.t + ph - ph * ((Number(v) - yMin) / span);
+
+    let svg = '<svg class="mg-plot-svg" viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">';
+    ticks.forEach((v) => {
+      if (v < yMin - 1e-9 || v > yMax + 1e-9) return;
+      const y = Y(v);
+      svg += '<line x1="' + pad.l + '" y1="' + y + '" x2="' + (W - pad.r) + '" y2="' + y + '" class="mg-plot-grid"/>';
+      svg += '<text x="' + (pad.l - 8) + '" y="' + (y + 4) + '" class="mg-plot-tick" text-anchor="end">' + fmtTick(v) + '</text>';
+    });
+    if (labels.length <= 12 || true) {
+      const step = labels.length > 12 ? Math.ceil(labels.length / 12) : 1;
+      labels.forEach((lab, i) => {
+        if (i % step === 0) {
+          svg += '<text x="' + X(i) + '" y="' + (H - 10) + '" class="mg-plot-tick mg-plot-x" text-anchor="middle">' + esc(lab) + '</text>';
+        }
+      });
+    }
+    svg += '<line x1="' + pad.l + '" y1="' + pad.t + '" x2="' + pad.l + '" y2="' + (pad.t + ph) + '" class="mg-plot-axis"/>';
+    svg += '<line x1="' + pad.l + '" y1="' + (pad.t + ph) + '" x2="' + (W - pad.r) + '" y2="' + (pad.t + ph) + '" class="mg-plot-axis"/>';
+    if (p.title) svg += '<text x="' + (W / 2) + '" y="16" class="mg-plot-title" text-anchor="middle">' + esc(p.title) + '</text>';
+
+    const numSeries = series.length || 1;
+    series.forEach((s, si) => {
+      const color = s.color || cols[si % cols.length];
+      if (type === 'bar') {
+        const totalBarGroupWidth = slotW * 0.75;
+        const bw = Math.max(2, totalBarGroupWidth / numSeries - 2);
+        const groupStart = (i) => X(i) - totalBarGroupWidth / 2;
+        (s.data || []).forEach((v, i) => {
+          const f = Number(v);
+          if (isNaN(f)) return;
+          const barX = groupStart(i) + si * (bw + 2);
+          const y = Y(f);
+          const barH = Math.max(1, (pad.t + ph) - y);
+          svg += '<rect x="' + barX + '" y="' + y + '" width="' + bw + '" height="' + barH + '" fill="' + color + '" rx="2" opacity="0.9"/>';
+        });
+      } else if (type === 'scatter') {
+        (s.points || []).forEach((pt) => {
+          if (!Array.isArray(pt) || pt.length < 2) return;
+          svg += '<circle cx="' + X(Number(pt[0])) + '" cy="' + Y(Number(pt[1])) + '" r="4" fill="' + color + '"/>';
+        });
+      } else {
+        let pts = '';
+        (s.data || []).forEach((v, i) => {
+          const f = Number(v);
+          if (isNaN(f)) return;
+          pts += (pts ? ' ' : '') + X(i) + ',' + Y(f);
+        });
+        if (pts) {
+          svg += '<polyline points="' + pts + '" fill="none" stroke="' + color + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+          (s.data || []).forEach((v, i) => {
+            const f = Number(v);
+            if (isNaN(f)) return;
+            svg += '<circle cx="' + X(i) + '" cy="' + Y(f) + '" r="3" fill="' + color + '"/>';
+          });
+        }
+      }
+      if (s.name) {
+        const ly = pad.t + 8 + si * 15;
+        svg += '<rect x="' + (pad.l + 6) + '" y="' + ly + '" width="9" height="9" fill="' + color + '" rx="1.5"/>';
+        svg += '<text x="' + (pad.l + 20) + '" y="' + (ly + 9) + '" class="mg-plot-tick">' + esc(s.name) + '</text>';
+      }
+    });
+    if (p.xlabel) svg += '<text x="' + (W / 2) + '" y="' + (H - 6) + '" class="mg-plot-tick" text-anchor="middle">' + esc(p.xlabel) + '</text>';
+    if (p.ylabel) svg += '<text x="16" y="' + (pad.t + ph / 2) + '" class="mg-plot-tick" text-anchor="middle" transform="rotate(-90 16 ' + (pad.t + ph / 2) + ')">' + esc(p.ylabel) + '</text>';
+    return svg + '</svg>';
+  }
+
+  register('checkbox', {
+    mount(c) {
+      const p = c.props;
+      const box = document.createElement('label');
+      box.className = 'mg-checkbox';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !!p.value;
+      if (p.interactive === false) { cb.disabled = true; box.classList.add('mg-disabled'); }
+      const span = document.createElement('span');
+      span.textContent = p.label || c.id;
+      box.append(cb, span);
+      cb.addEventListener('change', () => emit(c, 'change', cb.checked));
+      c.el.appendChild(box);
+      c.getValue = () => cb.checked;
+      c.apply = (patch) => {
+        if (patch.value != null && !!patch.value !== cb.checked) cb.checked = !!patch.value;
+        if (patch.label != null) span.textContent = patch.label;
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+        if (patch.disabled != null) { cb.disabled = !!patch.disabled; box.classList.toggle('mg-disabled', !!patch.disabled); }
+      };
+    }
+  });
+
+  register('dropdown', {
+    mount(c) {
+      const p = c.props;
+      const choices = Array.isArray(p.choices) ? p.choices : [];
+      const isMulti = !!p.multiple;
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-field-inner';
+      const lab = document.createElement('div');
+      lab.className = 'mg-label';
+      lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      wrap.appendChild(lab);
+      const sel = document.createElement('select');
+      sel.className = 'mg-select' + (isMulti ? ' mg-select-multi' : '');
+      if (isMulti) sel.multiple = true;
+      choices.forEach((ch) => {
+        const o = document.createElement('option');
+        o.value = ch.value != null ? String(ch.value) : String(ch.label);
+        o.textContent = ch.label != null ? String(ch.label) : String(ch.value);
+        sel.appendChild(o);
+      });
+      if (!isMulti) {
+        const e = document.createElement('option');
+        e.value = '';
+        e.textContent = '\u2014';
+        sel.prepend(e);
+      }
+      const setValue = (v) => {
+        const vals = isMulti ? (Array.isArray(v) ? v.map(String) : []) : [v == null ? '' : String(v)];
+        Array.from(sel.options).forEach((o) => { o.selected = vals.indexOf(o.value) >= 0; });
+      };
+      setValue(p.value);
+      if (p.interactive === false) sel.disabled = true;
+      const read = () => (isMulti ? Array.from(sel.selectedOptions).map((o) => o.value) : sel.value);
+      sel.addEventListener('change', () => emit(c, 'change', read()));
+      wrap.appendChild(sel);
+      if (p.allow_custom) {
+        const custom = document.createElement('input');
+        custom.className = 'mg-input';
+        custom.placeholder = 'valeur libre\u2026';
+        custom.addEventListener('input', () => { if (custom.value) emit(c, 'change', custom.value); });
+        const row = document.createElement('div');
+        row.className = 'mg-media-actions';
+        row.appendChild(custom);
+        wrap.appendChild(row);
+      }
+      c.el.appendChild(wrap);
+      c.getValue = () => read();
+      c.apply = (patch) => {
+        if (patch.value != null) setValue(patch.value);
+        if (patch.label != null) lab.innerHTML = '<span>' + esc(String(patch.label)) + '</span>';
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+        if (patch.disabled != null) sel.disabled = !!patch.disabled;
+      };
+    }
+  });
+
+  function dateTimeRegister(kind, pickerType) {
+    register(kind, {
+      mount(c) {
+        const p = c.props;
+        const wrap = document.createElement('div');
+        wrap.className = 'mg-field-inner';
+        wrap.innerHTML = '<div class="mg-label"><span>' + esc(p.label || c.id) + '</span></div>';
+        const inp = document.createElement('input');
+        inp.className = 'mg-input';
+        inp.type = pickerType;
+        if (p.min) inp.min = p.min;
+        if (p.max) inp.max = p.max;
+        if (p.value) inp.value = p.value;
+        if (p.interactive === false) inp.disabled = true;
+        inp.addEventListener('change', () => emit(c, 'change', inp.value));
+        wrap.appendChild(inp);
+        c.el.appendChild(wrap);
+        c.getValue = () => inp.value;
+        c.apply = (patch) => {
+          if (patch.value != null && String(patch.value) !== inp.value) inp.value = patch.value;
+          if (patch.visible != null) c.el.hidden = !patch.visible;
+        };
+      }
+    });
+  }
+  dateTimeRegister('date', 'date');
+  dateTimeRegister('time', 'time');
+
+  register('dataframe', {
+    mount(c) {
+      const p = c.props;
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-df';
+      const lab = document.createElement('div');
+      lab.className = 'mg-label';
+      lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      wrap.appendChild(lab);
+      const view = document.createElement('div');
+      view.className = 'mg-df-view';
+      wrap.appendChild(view);
+      c.el.appendChild(wrap);
+
+      let headers = Array.isArray(p.headers) && p.headers.length
+        ? p.headers.map(String)
+        : (Array.isArray(p.value) && p.value.length ? p.value[0].map((_, i) => 'col' + (i + 1)) : []);
+      let rows = Array.isArray(p.value) ? p.value.map((r) => (Array.isArray(r) ? r.slice() : [])) : [];
+      const editable = p.interactive !== false;
+      const sortable = p.sortable !== false;
+      let sort = null; // { i, dir } — colonne triée et direction (+1 asc / -1 desc)
+
+      const sortRows = () => {
+        if (!sort) return;
+        const { i, dir } = sort;
+        rows.sort((a, b) => {
+          const va = a[i] == null ? '' : a[i];
+          const vb = b[i] == null ? '' : b[i];
+          const na = Number(va), nb = Number(vb);
+          const cmp = (va !== '' && vb !== '' && !isNaN(na) && !isNaN(nb))
+            ? na - nb
+            : String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' });
+          return cmp * dir;
+        });
+      };
+
+      const build = () => {
+        const cols = Math.max(1, headers.length, ...rows.map((r) => r.length));
+        let html = '<table class="mg-table"><thead><tr>';
+        for (let i = 0; i < cols; i++) {
+          const act = sort && sort.i === i ? ' mg-df-sort-' + (sort.dir > 0 ? 'asc' : 'desc') : '';
+          const mark = sort && sort.i === i ? (sort.dir > 0 ? ' ▲' : ' ▼') : '';
+          html += '<th' + (sortable ? ' class="mg-df-sortable' + act + '" data-s="' + i + '"' : '') + '>' +
+            esc(i < headers.length ? headers[i] : 'col' + (i + 1)) + mark + '</th>';
+        }
+        if (editable && p.addable) html += '<th class="mg-df-ops"></th>';
+        html += '</tr></thead><tbody>';
+        rows.forEach((r) => {
+          html += '<tr>';
+          for (let i = 0; i < cols; i++) {
+            const v = r[i] == null ? '' : (Array.isArray(r[i]) || (r[i] && typeof r[i] === 'object') ? JSON.stringify(r[i]) : String(r[i]));
+            html += editable
+              ? '<td><input class="mg-cell" data-c="' + i + '" value="' + esc(v) + '"></td>'
+              : '<td>' + esc(v) + '</td>';
+          }
+          if (editable && p.addable) html += '<td><button type="button" class="mg-btn mg-ico mg-btn-secondary" title="Supprimer">x</button></td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+        view.innerHTML = html;
+        if (sortable) {
+          view.querySelectorAll('th[data-s]').forEach((th) => {
+            th.addEventListener('click', () => {
+              const i = +th.dataset.s;
+              if (sort && sort.i === i) sort.dir = -sort.dir; else sort = { i, dir: 1 };
+              sortRows();
+              build();
+              commit();
+            });
+          });
+        }
+        const redraw = () => { build(); commit(); };
+        if (editable) {
+          const add = document.createElement('button');
+          add.type = 'button';
+          add.className = 'mg-btn mg-btn-secondary';
+          add.textContent = '+ ligne';
+          add.addEventListener('click', () => { rows.push(Array(cols).fill('')); redraw(); });
+          view.appendChild(add);
+          view.querySelectorAll('input.mg-cell').forEach((inp) => {
+            inp.addEventListener('change', () => {
+              const r = +inp.closest('tr').rowIndex - 1;
+              const i = +inp.dataset.c;
+              while (rows.length <= r) rows.push([]);
+              rows[r][i] = inp.value;
+              commit();
+            });
+          });
+          view.querySelectorAll('.mg-df-ops button').forEach((b) => {
+            b.addEventListener('click', () => {
+              rows.splice(+b.closest('tr').rowIndex - 1, 1);
+              redraw();
+            });
+          });
+        }
+      };
+      const commit = () => {
+        if (p.interactive === false) return;
+        emit(c, 'change', { headers, data: rows });
+      };
+      build();
+
+      c.getValue = () => ({ headers, data: rows });
+      c.apply = (patch) => {
+        if (patch.value != null) {
+          const v = patch.value;
+          if (Array.isArray(v.headers)) {
+            headers = v.headers.map(String);
+          } else if (Array.isArray(v) ) {
+            rows = v.map((r) => (Array.isArray(r) ? r.slice() : []));
+            headers = rows[0] ? rows[0].map((_, i) => 'col' + (i + 1)) : headers;
+          } else if (v.data != null) {
+            headers = Array.isArray(v.headers) ? v.headers.map(String) : headers;
+            rows = Array.isArray(v.data) ? v.data.map((r) => (Array.isArray(r) ? r.slice() : [])) : rows;
+          }
+          if (v.data != null) rows = Array.isArray(v.data) ? v.data.map((r) => (Array.isArray(r) ? r.slice() : [])) : rows;
+          build();
+        }
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('plot', {
+    mount(c) {
+      const p = c.props;
+      const holder = document.createElement('div');
+      holder.className = 'mg-plot';
+      holder.innerHTML = '<div class="mg-label"><span>' + esc(p.label || c.id) + '</span></div>';
+      const box = document.createElement('div');
+      box.className = 'mg-plot-box';
+      holder.appendChild(box);
+      box.innerHTML = drawPlot(p.value || {}, p);
+      c.el.appendChild(holder);
+      c.apply = (patch) => {
+        if (patch.value != null && typeof patch.value === 'object') box.innerHTML = drawPlot(patch.value, p);
+        if (patch.label != null) { const s = holder.querySelector('.mg-label span'); if (s) s.textContent = patch.label; }
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('gallery', {
+    mount(c) {
+      const p = c.props;
+      const holder = document.createElement('div');
+      holder.className = 'mg-gallery';
+      const lab = document.createElement('div');
+      lab.className = 'mg-label';
+      lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      holder.appendChild(lab);
+      const grid = document.createElement('div');
+      grid.className = 'mg-gallery-grid';
+      grid.style.gridTemplateColumns = 'repeat(' + (p.columns || 3) + ', 1fr)';
+      holder.appendChild(grid);
+      const file = document.createElement('input');
+      file.type = 'file';
+      file.accept = 'image/*';
+      file.multiple = true;
+      file.hidden = true;
+      holder.appendChild(file);
+      let items = Array.isArray(p.value) ? p.value.slice() : [];
+      const itemObj = (it) => (it && typeof it === 'object') ? it : { image: it };
+      const images = () => items.map((it) => itemObj(it).image);
+      const rebuild = () => {
+        grid.innerHTML = '';
+        items.forEach((it, i) => {
+          const o = itemObj(it);
+          const cell = document.createElement('figure');
+          cell.className = 'mg-gallery-item';
+          const img = document.createElement('img');
+          img.src = o.image || '';
+          img.loading = 'lazy';
+          img.alt = '';
+          cell.appendChild(img);
+          if (o.caption) {
+            const cap = document.createElement('figcaption');
+            cap.textContent = o.caption;
+            cell.appendChild(cap);
+          }
+          if (p.interactive) {
+            cell.classList.add('del');
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'mg-ico';
+            del.textContent = 'x';
+            del.title = 'retirer';
+            del.addEventListener('click', (e) => {
+              e.stopPropagation();
+              items.splice(i, 1);
+              rebuild();
+              emit(c, 'change', images());
+            });
+            cell.appendChild(del);
+          }
+          cell.addEventListener('click', () => emit(c, 'click', i));
+          grid.appendChild(cell);
+        });
+      };
+      file.addEventListener('change', (e) => {
+        const fs = e.target.files ? Array.from(e.target.files) : [];
+        let rem = fs.length;
+        if (!rem) return;
+        fs.forEach((f) => readFile(f, (url) => {
+          items.push(url);
+          if (--rem === 0) { rebuild(); emit(c, 'change', images()); }
+        }));
+        file.value = '';
+      });
+      if (p.interactive && p.upload) {
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'mg-btn mg-btn-secondary';
+        addBtn.textContent = '+ image';
+        addBtn.addEventListener('click', () => file.click());
+        holder.appendChild(addBtn);
+        const gridDrop = (e) => {
+          e.preventDefault();
+          grid.classList.remove('hover');
+          const fs = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+          let rem = fs.length;
+          if (!rem) return;
+          fs.forEach((f) => readFile(f, (url) => {
+            items.push(url);
+            if (--rem === 0) { rebuild(); emit(c, 'change', images()); }
+          }));
+        };
+        grid.addEventListener('dragover', (e) => { e.preventDefault(); grid.classList.add('hover'); });
+        grid.addEventListener('dragleave', () => grid.classList.remove('hover'));
+        grid.addEventListener('drop', gridDrop);
+      }
+      rebuild();
+      c.getValue = () => images();
+      c.apply = (patch) => {
+        if (patch.value != null && Array.isArray(patch.value)) { items = patch.value.slice(); rebuild(); }
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('list', {
+    mount(c) {
+      const p = c.props;
+      const holder = document.createElement('div');
+      holder.className = 'mg-sortable';
+      const lab = document.createElement('div');
+      lab.className = 'mg-label';
+      lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      holder.appendChild(lab);
+      const ul = document.createElement('ul');
+      ul.className = 'mg-sortable-list';
+      holder.appendChild(ul);
+      c.el.appendChild(holder);
+
+      const items = Array.isArray(p.items) ? p.items : [];
+      const byVal = {};
+      items.forEach((it) => { byVal[String(it.value)] = it.label != null ? String(it.label) : String(it.value); });
+      let order = Array.isArray(p.value) ? p.value.map(String) : items.map((it) => String(it.value));
+      items.forEach((it) => { if (order.indexOf(String(it.value)) < 0) order.push(String(it.value)); });
+      const disabled = p.interactive === false;
+      let dragIdx = -1;
+
+      const render = () => {
+        ul.innerHTML = '';
+        order.forEach((v, i) => {
+          const li = document.createElement('li');
+          li.className = 'mg-sortable-item';
+          li.draggable = !disabled;
+          li.dataset.idx = i;
+          li.innerHTML = '<span class="mg-grip">\u22ef\u22ee</span><span class="mg-sortable-label">' + esc(byVal[v] || v) + '</span>';
+          if (disabled) { ul.appendChild(li); return; }
+          li.addEventListener('dragstart', (e) => {
+            dragIdx = i;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(v));
+            li.classList.add('dragging');
+          });
+          li.addEventListener('dragend', () => { li.classList.remove('dragging'); dragIdx = -1; });
+          li.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+          li.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const to = +li.dataset.idx;
+            if (dragIdx < 0 || dragIdx === to) return;
+            const moved = order.splice(dragIdx, 1)[0];
+            order.splice(to, 0, moved);
+            dragIdx = -1;
+            render();
+            emit(c, 'change', order.slice());
+          });
+          ul.appendChild(li);
+        });
+      };
+      render();
+      c.getValue = () => order.slice();
+      c.apply = (patch) => {
+        if (patch.value != null && Array.isArray(patch.value)) { order = patch.value.map(String); render(); }
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('code', {
+    mount(c) {
+      const p = c.props;
+      const editable = p.interactive !== false && !p.out;
+      const holder = document.createElement('div');
+      holder.className = 'mg-code mg-code-theme-' + (p.theme === 'auto' ? 'auto' : p.theme);
+      const bar = document.createElement('div');
+      bar.className = 'mg-code-bar';
+      const t = document.createElement('span');
+      t.textContent = p.label || c.id;
+      bar.appendChild(t);
+      if (p.language) {
+        const tag = document.createElement('span');
+        tag.className = 'mg-code-lang';
+        tag.textContent = p.language;
+        bar.appendChild(tag);
+      }
+      holder.appendChild(bar);
+      const editor = document.createElement('div');
+      editor.className = 'mg-code-editor';
+      const ln = document.createElement('div');
+      ln.className = 'mg-code-ln';
+      const body = document.createElement('div');
+      body.className = 'mg-code-body';
+      const pre = document.createElement('pre');
+      pre.className = 'mg-code-pre';
+      const code = document.createElement('code');
+      pre.appendChild(code);
+      body.appendChild(pre);
+      let ta = null;
+      if (editable) {
+        ta = document.createElement('textarea');
+        ta.className = 'mg-code-ta';
+        ta.spellcheck = false;
+        ta.wrap = 'off';
+        body.appendChild(ta);
+      }
+      editor.appendChild(ln);
+      editor.appendChild(body);
+      holder.appendChild(editor);
+      c.el.appendChild(holder);
+
+      let value = String(p.value != null ? p.value : '');
+      const paint = (v) => {
+        let lns = '';
+        const n = v.split('\n').length;
+        for (let i = 1; i <= n; i++) lns += i + '<br>';
+        ln.innerHTML = lns;
+        code.innerHTML = highlight(v, p.language || null) + '\n';
+      };
+      if (editable) {
+        ta.value = value;
+        const sync = () => {
+          pre.scrollTop = ta.scrollTop;
+          pre.scrollLeft = ta.scrollLeft;
+          ln.style.transform = 'translateY(-' + (ta.scrollTop || 0) + 'px)';
+        };
+        ta.addEventListener('input', () => {
+          value = ta.value;
+          paint(value);
+          sync();
+          if (ta._t) clearTimeout(ta._t);
+          ta._t = setTimeout(() => emit(c, 'change', value), 250);
+        });
+        ta.addEventListener('scroll', sync);
+      }
+      paint(value);
+      c.getValue = () => value;
+      c.apply = (patch) => {
+        if (patch.value != null && String(patch.value) !== value) {
+          value = String(patch.value);
+          if (editable) ta.value = value;
+          paint(value);
+        }
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('explorer', {
+    mount(c) {
+      const p = c.props;
+      const root = String(p.root || '.');
+      const pattern = p.pattern ? String(p.pattern) : null;
+      const holder = document.createElement('div');
+      holder.className = 'mg-explorer';
+      const lab = document.createElement('div');
+      lab.className = 'mg-label';
+      lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      holder.appendChild(lab);
+      const crumb = document.createElement('div');
+      crumb.className = 'mg-explorer-crumb';
+      holder.appendChild(crumb);
+      const list = document.createElement('div');
+      list.className = 'mg-explorer-list';
+      holder.appendChild(list);
+      c.el.appendChild(holder);
+
+      let current = '';
+      let selected = p.value ? String(p.value) : '';
+      const go = (path) => {
+        list.innerHTML = '<span class="mg-explorer-loading">chargement\u2026</span>';
+        let url = '/api/explore?root=' + encodeURIComponent(root) + '&path=' + encodeURIComponent(path);
+        if (pattern) url += '&pattern=' + encodeURIComponent(pattern);
+        fetch(url)
+          .then((r) => r.json())
+          .then((m) => {
+            if (m.t !== 'ok') { toast(m.m || 'erreur', 'error'); return; }
+            current = path;
+            const segs = path ? path.split('/').filter(Boolean) : [];
+            crumb.innerHTML = '';
+            const acc = [];
+            const home = document.createElement('button');
+            home.type = 'button';
+            home.className = 'mg-explorer-crumb-btn';
+            home.textContent = '\u2302';
+            home.title = 'racine';
+            home.addEventListener('click', () => go(''));
+            crumb.appendChild(home);
+            segs.forEach((seg) => {
+              acc.push(seg);
+              const b = document.createElement('button');
+              b.type = 'button';
+              b.className = 'mg-explorer-crumb-btn';
+              b.textContent = seg;
+              b.addEventListener('click', () => go(acc.join('/')));
+              crumb.appendChild(b);
+            });
+            list.innerHTML = '';
+            m.dirs.forEach((d) => {
+              const row = document.createElement('button');
+              row.type = 'button';
+              row.className = 'mg-explorer-row mg-explorer-dir';
+              row.textContent = '\u25b8 ' + d;
+              const rel = (path ? path + '/' : '') + d;
+              row.addEventListener('click', () => go(rel));
+              list.appendChild(row);
+            });
+            m.files.forEach((f) => {
+              const rel = (path ? path + '/' : '') + f;
+              const row = document.createElement('button');
+              row.type = 'button';
+              row.className = 'mg-explorer-row mg-explorer-file' + (selected === rel ? ' sel' : '');
+              row.textContent = f;
+              row.addEventListener('click', () => {
+                selected = rel;
+                list.querySelectorAll('.sel').forEach((el) => el.classList.remove('sel'));
+                row.classList.add('sel');
+                emit(c, 'change', rel);
+              });
+              list.appendChild(row);
+            });
+            if (!m.dirs.length && !m.files.length) {
+              list.innerHTML = '<span class="mg-explorer-empty">dossier vide</span>';
+            }
+          })
+          .catch(() => toast('explorateur injoignable', 'error'));
+      };
+      go(current);
+      c.getValue = () => selected;
+      c.apply = (patch) => {
+        if (patch.value != null) selected = String(patch.value);
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('button', {
+    mount(c) {
+      const p = c.props;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mg-btn ' + (p.variant === 'secondary' ? 'mg-btn-secondary' : 'mg-btn-primary');
+      btn.textContent = p.label || c.id;
+      c.el.appendChild(btn);
+      if (p.primary) runButton = btn;
+      btn.addEventListener('click', () => emit(c, 'click', null));
+      c.apply = (patch) => {
+        if (patch.label != null) btn.textContent = patch.label;
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+        if (patch.disabled != null) { btn.disabled = !!patch.disabled; c.el.classList.toggle('mg-disabled', !!patch.disabled); }
+      };
+    }
+  });
+
+  register('chatbot', {
+    mount(c) {
+      const p = c.props;
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-chatbot-wrap';
+      if (p.label) {
+        const lbl = document.createElement('div');
+        lbl.className = 'mg-label';
+        lbl.style.padding = '10px 14px';
+        lbl.style.borderBottom = '1px solid var(--mg-border)';
+        lbl.style.marginBottom = '0';
+        lbl.innerHTML = '<span>' + esc(p.label) + '</span>';
+        wrap.appendChild(lbl);
+      }
+      const hist = document.createElement('div');
+      hist.className = 'mg-chatbot-history';
+      if (p.height) hist.style.maxHeight = p.height + 'px';
+      wrap.appendChild(hist);
+
+      let messages = Array.isArray(p.value) ? p.value.slice() : [];
+
+      function renderMsg(m) {
+        const row = document.createElement('div');
+        const role = m.role || 'assistant';
+        row.className = 'mg-chat-row mg-' + (role === 'user' ? 'user' : 'assistant');
+        const bubble = document.createElement('div');
+        bubble.className = 'mg-chat-bubble';
+        bubble.innerHTML = markdown(m.content || '');
+        row.appendChild(bubble);
+        return row;
+      }
+
+      function rebuild() {
+        hist.innerHTML = '';
+        if (messages.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'mg-chatbot-empty';
+          empty.textContent = p.placeholder || 'Commencez la conversation...';
+          hist.appendChild(empty);
+          return;
+        }
+        messages.forEach((m) => hist.appendChild(renderMsg(m)));
+        hist.scrollTop = hist.scrollHeight;
+      }
+
+      rebuild();
+      c.el.appendChild(wrap);
+
+      c.apply = (patch) => {
+        if (patch.value != null) {
+          if (Array.isArray(patch.value)) {
+            messages = patch.value.slice();
+            rebuild();
+          }
+        }
+        if (patch.append != null && typeof patch.append === 'string') {
+          // Streaming de token vers le dernier message assistant (ou création si absent)
+          if (messages.length === 0 || messages[messages.length - 1].role !== 'assistant') {
+            messages.push({ role: 'assistant', content: patch.append });
+            rebuild();
+          } else {
+            messages[messages.length - 1].content += patch.append;
+            const rows = hist.querySelectorAll('.mg-chat-row');
+            if (rows.length > 0) {
+              const lastBubble = rows[rows.length - 1].querySelector('.mg-chat-bubble');
+              if (lastBubble) {
+                lastBubble.innerHTML = markdown(messages[messages.length - 1].content);
+                hist.scrollTop = hist.scrollHeight;
+              }
+            }
+          }
+        }
+        if (patch.label != null) {
+          const lbl = wrap.querySelector('.mg-label span');
+          if (lbl) lbl.textContent = patch.label;
+        }
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('metric', {
+    mount(c) {
+      const p = c.props;
+      const holder = document.createElement('div');
+      holder.className = 'mg-metric';
+      
+      const render = (props) => {
+        let deltaHtml = '';
+        if (props.delta) {
+          const cls = props.delta_color || (props.delta.startsWith('-') ? 'neg' : 'pos');
+          deltaHtml = `<div class="mg-metric-delta ${cls}"><span>${esc(props.delta)}</span></div>`;
+        }
+        const unitHtml = props.unit ? `<span class="mg-metric-unit">${esc(props.unit)}</span>` : '';
+        holder.innerHTML = `
+          <div class="mg-metric-label">${esc(props.label || c.id)}</div>
+          <div class="mg-metric-main">
+            <div class="mg-metric-value">${esc(props.value ?? '')}</div>
+            ${unitHtml}
+          </div>
+          ${deltaHtml}
+        `;
+      };
+
+      render(p);
+      c.el.appendChild(holder);
+
+      c.apply = (patch) => {
+        if (typeof patch.value === 'object' && patch.value !== null) {
+          Object.assign(p, patch.value);
+        } else if (patch.value != null) {
+          p.value = patch.value;
+        }
+        if (patch.delta != null) p.delta = patch.delta;
+        if (patch.delta_color != null) p.delta_color = patch.delta_color;
+        if (patch.unit != null) p.unit = patch.unit;
+        if (patch.label != null) p.label = patch.label;
+        render(p);
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('tabs', {
+    mount(c) {
+      const p = c.props;
+      const headers = p.labels || p.tabs || [];
+      let selected = p.selected || 0;
+
+      const bar = document.createElement('nav');
+      bar.className = 'mg-tabs-bar';
+
+      const panels = Array.from(c.el.querySelectorAll('.mg-tab-pane'));
+
+      headers.forEach((h, idx) => {
+        const labelText = typeof h === 'string' ? h : (h.label || `Tab ${idx + 1}`);
+        const iconText = typeof h === 'object' && h.icon ? `<span>${esc(h.icon)}</span> ` : '';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'mg-tab-btn' + (idx === selected ? ' mg-active' : '');
+        btn.innerHTML = iconText + esc(labelText);
+        btn.addEventListener('click', () => {
+          selected = idx;
+          bar.querySelectorAll('.mg-tab-btn').forEach((b, i) => b.classList.toggle('mg-active', i === selected));
+          panels.forEach((pane, i) => pane.classList.toggle('mg-active', i === selected));
+        });
+        bar.appendChild(btn);
+      });
+
+      c.el.insertBefore(bar, c.el.firstChild);
+      panels.forEach((pane, i) => pane.classList.toggle('mg-active', i === selected));
+
+      c.apply = (patch) => {
+        if (patch.selected != null && typeof patch.selected === 'number') {
+          selected = patch.selected;
+          bar.querySelectorAll('.mg-tab-btn').forEach((b, i) => b.classList.toggle('mg-active', i === selected));
+          panels.forEach((pane, i) => pane.classList.toggle('mg-active', i === selected));
+        }
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  /* ---------- boot ---------- */
+
+  function initTheme() {
+    const toggleBtn = document.getElementById('mg-theme-toggle');
+    const saved = localStorage.getItem('mg-theme');
+    if (saved === 'dark' || saved === 'light') {
+      document.documentElement.setAttribute('data-theme', saved);
+    }
+
+    if (toggleBtn) {
+      const updateIcon = () => {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+          || (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        toggleBtn.textContent = isDark ? '☀️' : '🌙';
+      };
+      updateIcon();
+
+      toggleBtn.addEventListener('click', () => {
+        const current = document.documentElement.getAttribute('data-theme');
+        let next;
+        if (current === 'dark') {
+          next = 'light';
+        } else if (current === 'light') {
+          next = 'dark';
+        } else {
+          next = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+        }
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('mg-theme', next);
+        updateIcon();
+      });
+    }
+  }
+
+  function initPreferences() {
+    const prefsBtn = document.getElementById('mg-prefs-btn');
+    const modal = document.getElementById('mg-prefs-modal');
+    const closeBtn = document.getElementById('mg-prefs-close');
+
+    if (!modal) return;
+
+    const openModal = () => {
+      modal.hidden = false;
+      const current = document.documentElement.getAttribute('data-theme') || 'system';
+      modal.querySelectorAll('.mg-theme-btn').forEach((b) => {
+        b.classList.toggle('active', b.dataset.setTheme === current);
+      });
+    };
+
+    const closeModal = () => {
+      modal.hidden = true;
+    };
+
+    if (prefsBtn) prefsBtn.addEventListener('click', openModal);
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    modal.querySelectorAll('.mg-theme-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.setTheme;
+        if (mode === 'system') {
+          document.documentElement.removeAttribute('data-theme');
+          localStorage.removeItem('mg-theme');
+        } else {
+          document.documentElement.setAttribute('data-theme', mode);
+          localStorage.setItem('mg-theme', mode);
+        }
+        modal.querySelectorAll('.mg-theme-btn').forEach((b) => b.classList.toggle('active', b === btn));
+        const toggleBtn = document.getElementById('mg-theme-toggle');
+        if (toggleBtn) {
+          const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+            || (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          toggleBtn.textContent = isDark ? '☀️' : '🌙';
+        }
+      });
+    });
+  }
+
+  function init() {
+    initTheme();
+    initPreferences();
+    document.querySelectorAll('[data-kind]').forEach(mount);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target && e.target.classList.contains('mg-input') && runButton) {
+        e.preventDefault();
+        runButton.click();
+      }
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('mg-prefs-modal');
+        if (modal && !modal.hidden) modal.hidden = true;
+      }
+    });
+    connect();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+
+  window.MG = { register, emit, byId, markdown, stream(id) { return { send(blob) { const c = byId[id]; if (c && blob) sendStream(c, blob); } }; } };
+})();
