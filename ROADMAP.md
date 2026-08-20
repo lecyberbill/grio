@@ -343,18 +343,24 @@ l'**inpainting** côté serveur. Fond par défaut en dégradé si pas d'image.
 - Exemple complet : `examples/theme_and_tabs.rs`.
 - **Fichiers** : `components.rs` (`Metric`, `Tabs`, `SectionBuilder`), `app.rs`, `lib.rs`, `server.rs`, `styles.css`, `app.js`.
 
-### 6.6 Exemples & Templates d'inférence IA (Candle / ONNX / LLM) · [P1]
-- Exemple d'inférence locale LLM / embeddings avec streaming réel.
-- Exemple vision / classification d'images via `Image` et `ImageEditor`.
-- **Fichiers à toucher** : `examples/`.
+### 6.6 Multimodal AI Studio, Live Telemetry & Benchmarks (`examples/prompt_to_image.rs`) · ✅
+- **Autoregressive LLM**: Real quantized tensor matrix passes in GPU memory via Candle (Qwen 2.5 7B GGUF) with word-by-word token streaming.
+- **Image Generation Pipeline**: Multistep diffusion checkpoint inference with real-time latent streaming.
+- **Observability & Analytics**: Live telemetry dataframe (`Dataframe`), throughput speed graphs (`Plot` line chart), VRAM allocation charts (`Plot` bar chart), and dynamic KPI cards (`Metric`).
+- **Config-Driven**: `models.toml` configuration decoupling paths for portability.
+- **Files**: `examples/prompt_to_image.rs`, `models.toml`.
+
+### 6.7 Multilingual Engine (i18n) & Interactive API Code Generator · ✅
+- **i18n System**: Dynamic language switcher in Settings modal (🇬🇧 English, 🇫🇷 Français, 🇪🇸 Español, 🇩🇪 Deutsch) translating all component defaults, modals, and alerts without page reloads.
+- **Interactive `⚡ Use via API` Modal**: Auto-generates ready-to-run client code for Python (`requests`), JavaScript (`fetch`), cURL, and Model Context Protocol (MCP Tool) for LLM agents.
+- **Brand Identity**: Adopted Rust gear logo (`⚙️ grio`).
+- **Files**: `server.rs`, `app.js`, `styles.css`.
 
 ---
 
-## Conventions pour tenir la roadmap
+## Roadmap Conventions
 
-1. Une tâche = une case cochée plus loin + une ligne dans `README.md`.
-2. Chaque item mentionne les fichiers touchés avant d'être commencé.
-3. Les critères *Accepté quand* sont les tests d'acceptation — les écrire en
-   premier si possible.
-4. Toujours `cargo build -p grio --example greet` et zéro warning avant de
-   cocher.
+1. One task = one checked box + an entry in `README.md`.
+2. Every item lists affected files before starting.
+3. Criteria *Accepted when* serve as the acceptance tests.
+4. Always ensure `cargo check -p grio --all-targets` has zero errors and warnings.
