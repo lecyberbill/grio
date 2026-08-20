@@ -867,54 +867,82 @@ fn render_page(app: &App) -> String {
   </div>
   <footer class="mg-footer">
     <div class="mg-footer-brand">
-      <span>Powered by <strong class="mg-brand-gradient">grio</strong> · Native Rust Web Framework</span>
+      <span>Powered by <strong class="mg-brand-gradient">⚙️ grio</strong> · Native Rust Web Framework</span>
     </div>
     <div class="mg-footer-actions">
-      <a href="/docs" target="_blank" class="mg-footer-link" title="OpenAPI Documentation">📖 API Docs</a>
-      <a href="/api/schema" target="_blank" class="mg-footer-link" title="JSON Schema">⚙️ Schema</a>
-      <button id="mg-prefs-btn" class="mg-footer-btn" type="button" title="Preferences & API Details">⚙️ Preferences</button>
+      <button id="mg-api-btn" class="mg-footer-btn mg-api-launcher" type="button" title="View API Code Snippets (Python, JS, cURL, MCP)">⚡ <span data-i18n="use_api">Use via API</span></button>
+      <a href="/docs" target="_blank" class="mg-footer-link" title="OpenAPI Documentation">📖 <span data-i18n="api_docs">API Docs</span></a>
+      <a href="/api/schema" target="_blank" class="mg-footer-link" title="JSON Schema">⚙️ <span data-i18n="schema">Schema</span></a>
+      <button id="mg-prefs-btn" class="mg-footer-btn" type="button" title="Preferences & Settings">⚙️ <span data-i18n="settings">Settings</span></button>
     </div>
   </footer>
 </main>
 
+<!-- Modal: Preferences & Language -->
 <div id="mg-prefs-modal" class="mg-modal-overlay" hidden>
   <div class="mg-modal-dialog">
     <header class="mg-modal-header">
-      <h3>⚙️ App Preferences & API Explorer</h3>
-      <button id="mg-prefs-close" class="mg-modal-close" type="button">×</button>
+      <h3>⚙️ <span data-i18n="settings_title">Application Settings</span></h3>
+      <button id="mg-prefs-close" class="mg-modal-close" type="button">✕</button>
     </header>
     <div class="mg-modal-body">
       <div class="mg-modal-section">
-        <h4>🎨 Theme Customization</h4>
+        <h4>🌐 <span data-i18n="language">Language / Langue</span></h4>
+        <div class="mg-lang-switch-group">
+          <button class="mg-lang-btn active" data-set-lang="en">🇬🇧 English</button>
+          <button class="mg-lang-btn" data-set-lang="fr">🇫🇷 Français</button>
+          <button class="mg-lang-btn" data-set-lang="es">🇪🇸 Español</button>
+          <button class="mg-lang-btn" data-set-lang="de">🇩🇪 Deutsch</button>
+        </div>
+      </div>
+      <div class="mg-modal-section">
+        <h4>🎨 <span data-i18n="theme">Theme Customization</span></h4>
         <div class="mg-theme-switch-group">
           <button class="mg-theme-btn" data-set-theme="system">💻 System</button>
           <button class="mg-theme-btn" data-set-theme="light">☀️ Light</button>
           <button class="mg-theme-btn" data-set-theme="dark">🌙 Dark</button>
         </div>
       </div>
-      <div class="mg-modal-section">
-        <h4>🔌 Integration Endpoints</h4>
-        <div class="mg-endpoint-list">
-          <div class="mg-endpoint-item">
-            <span class="mg-badge-method post">POST</span>
-            <code>/api/predict</code>
-            <span class="mg-endpoint-desc">Direct inference API</span>
-          </div>
-          <div class="mg-endpoint-item">
-            <span class="mg-badge-method get">GET</span>
-            <code>/api/schema</code>
-            <span class="mg-endpoint-desc">Component inputs/outputs schema</span>
-          </div>
-          <div class="mg-endpoint-item">
-            <span class="mg-badge-method get">GET</span>
-            <code>/docs</code>
-            <span class="mg-endpoint-desc">Interactive Swagger UI</span>
-          </div>
-          <div class="mg-endpoint-item">
-            <span class="mg-badge-method get">GET</span>
-            <code>/api/openapi.json</code>
-            <span class="mg-endpoint-desc">OpenAPI 3.0.3 specification</span>
-          </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Use via API (Python, JS, cURL, MCP Snippets) -->
+<div id="mg-api-modal" class="mg-modal-overlay" hidden>
+  <div class="mg-modal-dialog mg-modal-lg">
+    <header class="mg-modal-header">
+      <div class="mg-modal-title-group">
+        <h3>⚡ <span data-i18n="api_title">API Documentation & Client Code</span></h3>
+        <span class="mg-badge-endpoint">POST /api/predict</span>
+      </div>
+      <button id="mg-api-close" class="mg-modal-close" type="button">✕</button>
+    </header>
+    <div class="mg-modal-body">
+      <p class="mg-api-intro" data-i18n="api_intro">Interact with this grio AI application programmatically via Python, JavaScript, cURL or Model Context Protocol (MCP).</p>
+      
+      <!-- Snippet Tabs -->
+      <div class="mg-api-tabs">
+        <button class="mg-api-tab active" data-tab="python">🐍 Python</button>
+        <button class="mg-api-tab" data-tab="js">🟨 JavaScript</button>
+        <button class="mg-api-tab" data-tab="curl">💻 cURL</button>
+        <button class="mg-api-tab" data-tab="mcp">🤖 MCP Tool</button>
+      </div>
+
+      <!-- Code Snippet Area -->
+      <div class="mg-api-code-wrapper">
+        <div class="mg-api-code-header">
+          <span id="mg-api-lang-tag">python</span>
+          <button id="mg-copy-snippet-btn" class="mg-copy-btn" type="button">📋 <span data-i18n="copy_code">Copy Snippet</span></button>
+        </div>
+        <pre class="mg-api-code-block"><code id="mg-api-code-content"></code></pre>
+      </div>
+
+      <div class="mg-api-meta-info">
+        <div class="mg-api-meta-item">
+          <strong>Endpoint URL:</strong> <code id="mg-api-full-url">http://127.0.0.1:7860/api/predict</code>
+        </div>
+        <div class="mg-api-meta-item">
+          <strong>Content-Type:</strong> <code>application/json</code>
         </div>
       </div>
     </div>

@@ -1,0 +1,22 @@
+# =============================================================================
+# ⚙️ grio Multimodal Studio — Model & Environment Configuration
+# =============================================================================
+# Users can customize their local model weights, tokenizers, and python paths here.
+# Default fallback discovery scans local project paths or environment variables.
+
+[llm]
+# Path to quantized GGUF weights (Qwen 2.5, Llama 3, Mistral, etc.)
+gguf_path = "D:\\image_to_text\\wa-super-prompt-helper\\model\\Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+
+# Path to tokenizer.json
+tokenizer_path = "D:\\image_to_text\\.cache\\hub\\models--Qwen--Qwen2.5-7B-Instruct\\snapshots\\a09a35458c702b33eeacc393d103063234e8bc28\\tokenizer.json"
+
+[sdxl]
+# Directory containing SDXL Safetensors checkpoints
+checkpoints_dir = "G:\\models\\checkpoints"
+
+# Python interpreter with torch + diffusers installed (or just "python" if in PATH)
+python_exe = "D:\\image_to_text\\Pycnaptiq-AI\\Pycnaptiq-AI\\venv\\Scripts\\python.exe"
+
+# Directory where generated images are saved
+output_dir = "output_images"

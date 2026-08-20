@@ -1019,7 +1019,7 @@
     const type = (spec && spec.variant) || p.variant || 'line';
     const W = p.width || 480;
     const H = p.height || 280;
-    const pad = { l: 60, r: 14, t: (p.title ? 26 : 10), b: 30 };
+    const pad = { l: 60, r: 14, t: (p.title ? 26 : 10), b: (p.xlabel ? 44 : 26) };
     const pw = W - pad.l - pad.r;
     const ph = H - pad.t - pad.b;
     const labels = (spec && Array.isArray(spec.labels)) ? spec.labels.map(String) : [];
@@ -1071,7 +1071,7 @@
       const step = labels.length > 12 ? Math.ceil(labels.length / 12) : 1;
       labels.forEach((lab, i) => {
         if (i % step === 0) {
-          svg += '<text x="' + X(i) + '" y="' + (H - 10) + '" class="mg-plot-tick mg-plot-x" text-anchor="middle">' + esc(lab) + '</text>';
+          svg += '<text x="' + X(i) + '" y="' + (pad.t + ph + 16) + '" class="mg-plot-tick mg-plot-x" text-anchor="middle">' + esc(lab) + '</text>';
         }
       });
     }
@@ -1121,7 +1121,7 @@
         svg += '<text x="' + (pad.l + 20) + '" y="' + (ly + 9) + '" class="mg-plot-tick">' + esc(s.name) + '</text>';
       }
     });
-    if (p.xlabel) svg += '<text x="' + (W / 2) + '" y="' + (H - 6) + '" class="mg-plot-tick" text-anchor="middle">' + esc(p.xlabel) + '</text>';
+    if (p.xlabel) svg += '<text x="' + (pad.l + pw / 2) + '" y="' + (H - 4) + '" class="mg-plot-tick mg-plot-label-x" text-anchor="middle" font-weight="600">' + esc(p.xlabel) + '</text>';
     if (p.ylabel) svg += '<text x="16" y="' + (pad.t + ph / 2) + '" class="mg-plot-tick" text-anchor="middle" transform="rotate(-90 16 ' + (pad.t + ph / 2) + ')">' + esc(p.ylabel) + '</text>';
     return svg + '</svg>';
   }
@@ -1381,46 +1381,110 @@
       const p = c.props;
       const holder = document.createElement('div');
       holder.className = 'mg-gallery';
+      
+      // Styling custom dimensions
+      if (p.height) holder.style.height = typeof p.height === 'number' ? p.height + 'px' : p.height;
+      if (p.min_height) holder.style.minHeight = typeof p.min_height === 'number' ? p.min_height + 'px' : p.min_height;
+      if (p.max_height) holder.style.maxHeight = typeof p.max_height === 'number' ? p.max_height + 'px' : p.max_height;
+      
       const lab = document.createElement('div');
       lab.className = 'mg-label';
       lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      if (p.label === '' || p.label === false) lab.style.display = 'none';
       holder.appendChild(lab);
+
+      const scrollBox = document.createElement('div');
+      scrollBox.className = 'mg-gallery-scroll';
+      if (p.height || p.max_height || p.rows) {
+        scrollBox.classList.add('mg-scrollable');
+      }
+
       const grid = document.createElement('div');
       grid.className = 'mg-gallery-grid';
-      grid.style.gridTemplateColumns = 'repeat(' + (p.columns || 3) + ', 1fr)';
-      holder.appendChild(grid);
+      const cols = p.columns || 3;
+      grid.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
+      scrollBox.appendChild(grid);
+      holder.appendChild(scrollBox);
+
       const file = document.createElement('input');
       file.type = 'file';
       file.accept = 'image/*';
       file.multiple = true;
       file.hidden = true;
       holder.appendChild(file);
+
       let items = Array.isArray(p.value) ? p.value.slice() : [];
       const itemObj = (it) => (it && typeof it === 'object') ? it : { image: it };
       const images = () => items.map((it) => itemObj(it).image);
+
+      // Lightbox preview modal
+      const openLightbox = (url, caption) => {
+        if (!p.allow_preview) return;
+        const modal = document.createElement('div');
+        modal.className = 'mg-gallery-lightbox';
+        modal.innerHTML = `
+          <div class="mg-lightbox-backdrop"></div>
+          <div class="mg-lightbox-content">
+            <button class="mg-lightbox-close" title="Fermer (Échap)">✕</button>
+            <img src="${url}" alt="${esc(caption || '')}" class="mg-lightbox-img">
+            ${caption ? `<div class="mg-lightbox-caption">${esc(caption)}</div>` : ''}
+          </div>
+        `;
+        const close = () => {
+          modal.classList.add('closing');
+          setTimeout(() => modal.remove(), 200);
+          document.removeEventListener('keydown', onKey);
+        };
+        const onKey = (e) => { if (e.key === 'Escape') close(); };
+        modal.querySelector('.mg-lightbox-backdrop').addEventListener('click', close);
+        modal.querySelector('.mg-lightbox-close').addEventListener('click', close);
+        document.addEventListener('keydown', onKey);
+        document.body.appendChild(modal);
+        requestAnimationFrame(() => modal.classList.add('active'));
+      };
+
       const rebuild = () => {
         grid.innerHTML = '';
-        items.forEach((it, i) => {
+        let displayList = items;
+        if (p.limit && typeof p.limit === 'number' && p.limit > 0) {
+          displayList = items.slice(0, p.limit);
+        }
+
+        displayList.forEach((it, i) => {
           const o = itemObj(it);
           const cell = document.createElement('figure');
           cell.className = 'mg-gallery-item';
+          
           const img = document.createElement('img');
           img.src = o.image || '';
           img.loading = 'lazy';
-          img.alt = '';
+          img.alt = o.caption || '';
+          if (p.object_fit) img.style.objectFit = p.object_fit;
+          if (p.item_height) {
+            img.style.height = typeof p.item_height === 'number' ? p.item_height + 'px' : p.item_height;
+          }
+          if (p.item_width) {
+            img.style.width = typeof p.item_width === 'number' ? p.item_width + 'px' : p.item_width;
+          }
+          if (p.aspect_ratio) {
+            img.style.aspectRatio = p.aspect_ratio;
+          }
           cell.appendChild(img);
+
           if (o.caption) {
             const cap = document.createElement('figcaption');
             cap.textContent = o.caption;
+            cap.title = o.caption;
             cell.appendChild(cap);
           }
+
           if (p.interactive) {
             cell.classList.add('del');
             const del = document.createElement('button');
             del.type = 'button';
             del.className = 'mg-ico';
-            del.textContent = 'x';
-            del.title = 'retirer';
+            del.textContent = '✕';
+            del.title = 'Retirer';
             del.addEventListener('click', (e) => {
               e.stopPropagation();
               items.splice(i, 1);
@@ -1429,27 +1493,34 @@
             });
             cell.appendChild(del);
           }
-          cell.addEventListener('click', () => emit(c, 'click', i));
+
+          cell.addEventListener('click', () => {
+            emit(c, 'click', i);
+            openLightbox(o.image, o.caption);
+          });
           grid.appendChild(cell);
         });
       };
+
       file.addEventListener('change', (e) => {
         const fs = e.target.files ? Array.from(e.target.files) : [];
         let rem = fs.length;
         if (!rem) return;
         fs.forEach((f) => readFile(f, (url) => {
-          items.push(url);
-          if (--rem === 0) { rebuild(); emit(c, 'change', images()); }
+          items.unshift({ image: url, caption: f.name });
+          if (--rem === 0) { rebuild(); emit(c, 'change', items); }
         }));
         file.value = '';
       });
+
       if (p.interactive && p.upload) {
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
-        addBtn.className = 'mg-btn mg-btn-secondary';
-        addBtn.textContent = '+ image';
+        addBtn.className = 'mg-btn mg-btn-secondary mg-gallery-upload-btn';
+        addBtn.textContent = '+ Ajouter une image';
         addBtn.addEventListener('click', () => file.click());
         holder.appendChild(addBtn);
+
         const gridDrop = (e) => {
           e.preventDefault();
           grid.classList.remove('hover');
@@ -1457,18 +1528,22 @@
           let rem = fs.length;
           if (!rem) return;
           fs.forEach((f) => readFile(f, (url) => {
-            items.push(url);
-            if (--rem === 0) { rebuild(); emit(c, 'change', images()); }
+            items.unshift({ image: url, caption: f.name });
+            if (--rem === 0) { rebuild(); emit(c, 'change', items); }
           }));
         };
         grid.addEventListener('dragover', (e) => { e.preventDefault(); grid.classList.add('hover'); });
         grid.addEventListener('dragleave', () => grid.classList.remove('hover'));
         grid.addEventListener('drop', gridDrop);
       }
+
       rebuild();
-      c.getValue = () => images();
+      c.el.appendChild(holder);
+      c.getValue = () => items.slice();
       c.apply = (patch) => {
         if (patch.value != null && Array.isArray(patch.value)) { items = patch.value.slice(); rebuild(); }
+        if (patch.label != null) { const s = holder.querySelector('.mg-label span'); if (s) s.textContent = patch.label; }
+        if (patch.columns != null) { grid.style.gridTemplateColumns = 'repeat(' + patch.columns + ', minmax(0, 1fr))'; }
         if (patch.visible != null) c.el.hidden = !patch.visible;
       };
     }
@@ -1917,6 +1992,204 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // i18n Internationalization Engine
+  // ---------------------------------------------------------------------------
+  const I18N = {
+    en: {
+      use_api: "Use via API",
+      api_docs: "API Docs",
+      schema: "Schema",
+      settings: "Settings",
+      settings_title: "Application Settings",
+      language: "Language",
+      theme: "Theme Customization",
+      api_title: "API Documentation & Client Code",
+      api_intro: "Interact with this grio AI application programmatically via Python, JavaScript, cURL or Model Context Protocol (MCP).",
+      copy_code: "Copy Snippet",
+      copied: "Copied!",
+      no_images: "No images yet",
+      drop_images: "Drop images here or click to browse",
+      add_image: "+ Add image",
+      add_row: "+ Add Row",
+      empty_chat: "Start the conversation...",
+      model_weights_loaded: "Model weights loaded successfully",
+    },
+    fr: {
+      use_api: "Utiliser via API",
+      api_docs: "Doc API",
+      schema: "Schéma",
+      settings: "Paramètres",
+      settings_title: "Paramètres de l'Application",
+      language: "Langue",
+      theme: "Personnalisation du Thème",
+      api_title: "Documentation API & Code Client",
+      api_intro: "Interagissez avec cette application grio par programmation via Python, JavaScript, cURL ou Model Context Protocol (MCP).",
+      copy_code: "Copier l'extrait",
+      copied: "Copié !",
+      no_images: "Aucune image pour le moment",
+      drop_images: "Glissez vos images ici ou cliquez pour parcourir",
+      add_image: "+ Ajouter une image",
+      add_row: "+ Ajouter une ligne",
+      empty_chat: "Commencez la conversation...",
+      model_weights_loaded: "Poids du modèle chargés avec succès",
+    },
+    es: {
+      use_api: "Usar vía API",
+      api_docs: "Doc API",
+      schema: "Esquema",
+      settings: "Ajustes",
+      settings_title: "Ajustes de la Aplicación",
+      language: "Idioma",
+      theme: "Personalización del Tema",
+      api_title: "Documentación API y Código Cliente",
+      api_intro: "Interactúe con esta aplicación grio programáticamente mediante Python, JavaScript, cURL o MCP.",
+      copy_code: "Copiar fragmento",
+      copied: "¡Copiado!",
+      no_images: "No hay imágenes aún",
+      drop_images: "Arrastre imágenes aquí o haga clic para explorar",
+      add_image: "+ Añadir imagen",
+      add_row: "+ Añadir fila",
+      empty_chat: "Comience la conversación...",
+      model_weights_loaded: "Pesos del modelo cargados con éxito",
+    },
+    de: {
+      use_api: "Über API nutzen",
+      api_docs: "API-Doku",
+      schema: "Schema",
+      settings: "Einstellungen",
+      settings_title: "Anwendungseinstellungen",
+      language: "Sprache",
+      theme: "Design-Anpassung",
+      api_title: "API-Dokumentation & Client-Code",
+      api_intro: "Interagieren Sie programmgesteuert mit dieser grio-App über Python, JavaScript, cURL oder MCP.",
+      copy_code: "Code kopieren",
+      copied: "Kopiert!",
+      no_images: "Noch keine Bilder",
+      drop_images: "Bilder hierher ziehen oder klicken",
+      add_image: "+ Bild hinzufügen",
+      add_row: "+ Zeile hinzufügen",
+      empty_chat: "Beginnen Sie das Gespräch...",
+      model_weights_loaded: "Modellgewichte erfolgreich geladen",
+    }
+  };
+
+  let currentLang = localStorage.getItem('mg-lang') || 'en';
+
+  function t(key, fallback) {
+    const dict = I18N[currentLang] || I18N.en;
+    return dict[key] || (I18N.en && I18N.en[key]) || fallback || key;
+  }
+
+  function applyTranslations() {
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+      const key = el.dataset.i18n;
+      const text = t(key);
+      if (text) el.textContent = text;
+    });
+  }
+
+  function setLanguage(lang) {
+    if (!I18N[lang]) lang = 'en';
+    currentLang = lang;
+    localStorage.setItem('mg-lang', lang);
+    document.documentElement.setAttribute('lang', lang);
+    applyTranslations();
+    document.querySelectorAll('.mg-lang-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.setLang === lang);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // API Snippets Generator (Python, JS, cURL, MCP)
+  // ---------------------------------------------------------------------------
+  function generateApiSnippets() {
+    const host = window.location.origin;
+    const predictUrl = host + '/api/predict';
+
+    // Collect current input names and sample values
+    const inputs = {};
+    Object.keys(byId).forEach((id) => {
+      const comp = byId[id];
+      if (comp && comp.role === 'input' && comp.getValue) {
+        let val = comp.getValue();
+        if (typeof val === 'string' && val.length > 50) val = val.substring(0, 47) + '...';
+        inputs[id] = val;
+      }
+    });
+
+    const inputsJson = JSON.stringify(inputs, null, 2);
+
+    return {
+      python: `import requests\n\n# 1. API Endpoint URL\nurl = "${predictUrl}"\n\n# 2. Request Payload (Inputs)\npayload = {\n    "inputs": ${inputsJson.replace(/\n/g, '\n    ')}\n}\n\n# 3. Perform Prediction Call\nresponse = requests.post(url, json=payload)\nresult = response.json()\n\nprint("Status:", result.get("ok"))\nprint("Outputs:", result.get("outputs"))`,
+      
+      js: `// 1. Prediction Payload\nconst payload = {\n  inputs: ${inputsJson.replace(/\n/g, '\n  ')}\n};\n\n// 2. Call grio REST API\nasync function runPrediction() {\n  const response = await fetch("${predictUrl}", {\n    method: "POST",\n    headers: { "Content-Type": "application/json" },\n    body: JSON.stringify(payload)\n  });\n  const result = await response.json();\n  console.log("Prediction Result:", result);\n}\n\nrunPrediction();`,
+
+      curl: `curl -X POST "${predictUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "inputs": ${inputsJson.replace(/\n/g, '\n    ')}\n  }'`,
+
+      mcp: `{\n  "name": "grio_ai_predict",\n  "description": "Execute prediction on grio multimodal AI pipeline",\n  "parameters": {\n    "type": "object",\n    "properties": {\n      "inputs": {\n        "type": "object",\n        "description": "Dynamic application parameters",\n        "properties": {\n${Object.keys(inputs).map(k => `          "${k}": { "type": "${typeof inputs[k]}" }`).join(',\n')}\n        }\n      }\n    },\n    "required": ["inputs"]\n  }\n}`
+    };
+  }
+
+  function initApiModal() {
+    const apiBtn = document.getElementById('mg-api-btn');
+    const modal = document.getElementById('mg-api-modal');
+    const closeBtn = document.getElementById('mg-api-close');
+    const tabs = modal ? modal.querySelectorAll('.mg-api-tab') : [];
+    const codeEl = document.getElementById('mg-api-code-content');
+    const langTag = document.getElementById('mg-api-lang-tag');
+    const copyBtn = document.getElementById('mg-copy-snippet-btn');
+    const fullUrl = document.getElementById('mg-api-full-url');
+
+    if (!modal) return;
+
+    let activeTab = 'python';
+
+    const renderSnippet = () => {
+      const snippets = generateApiSnippets();
+      if (codeEl) codeEl.textContent = snippets[activeTab] || snippets.python;
+      if (langTag) langTag.textContent = activeTab;
+      if (fullUrl) fullUrl.textContent = window.location.origin + '/api/predict';
+    };
+
+    const openModal = () => {
+      modal.hidden = false;
+      renderSnippet();
+    };
+
+    const closeModal = () => {
+      modal.hidden = true;
+    };
+
+    if (apiBtn) apiBtn.addEventListener('click', openModal);
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        tabs.forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+        activeTab = tab.dataset.tab;
+        renderSnippet();
+      });
+    });
+
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        const text = codeEl ? codeEl.textContent : '';
+        if (navigator.clipboard && text) {
+          navigator.clipboard.writeText(text).then(() => {
+            const orig = copyBtn.innerHTML;
+            copyBtn.textContent = '✓ ' + t('copied', 'Copied!');
+            setTimeout(() => { copyBtn.innerHTML = orig; }, 1800);
+          });
+        }
+      });
+    }
+  }
+
   function initPreferences() {
     const prefsBtn = document.getElementById('mg-prefs-btn');
     const modal = document.getElementById('mg-prefs-modal');
@@ -1926,9 +2199,12 @@
 
     const openModal = () => {
       modal.hidden = false;
-      const current = document.documentElement.getAttribute('data-theme') || 'system';
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'system';
       modal.querySelectorAll('.mg-theme-btn').forEach((b) => {
-        b.classList.toggle('active', b.dataset.setTheme === current);
+        b.classList.toggle('active', b.dataset.setTheme === currentTheme);
+      });
+      modal.querySelectorAll('.mg-lang-btn').forEach((b) => {
+        b.classList.toggle('active', b.dataset.setLang === currentLang);
       });
     };
 
@@ -1940,6 +2216,12 @@
     if (closeBtn) closeBtn.addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => {
       if (e.target === modal) closeModal();
+    });
+
+    modal.querySelectorAll('.mg-lang-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        setLanguage(btn.dataset.setLang);
+      });
     });
 
     modal.querySelectorAll('.mg-theme-btn').forEach((btn) => {
@@ -1965,7 +2247,9 @@
 
   function init() {
     initTheme();
+    setLanguage(currentLang);
     initPreferences();
+    initApiModal();
     document.querySelectorAll('[data-kind]').forEach(mount);
 
     document.addEventListener('keydown', (e) => {
@@ -1974,8 +2258,10 @@
         runButton.click();
       }
       if (e.key === 'Escape') {
-        const modal = document.getElementById('mg-prefs-modal');
-        if (modal && !modal.hidden) modal.hidden = true;
+        const prefs = document.getElementById('mg-prefs-modal');
+        const apiModal = document.getElementById('mg-api-modal');
+        if (prefs && !prefs.hidden) prefs.hidden = true;
+        if (apiModal && !apiModal.hidden) apiModal.hidden = true;
       }
     });
     connect();
@@ -1984,5 +2270,5 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 
-  window.MG = { register, emit, byId, markdown, stream(id) { return { send(blob) { const c = byId[id]; if (c && blob) sendStream(c, blob); } }; } };
+  window.MG = { register, emit, byId, markdown, t, setLanguage, stream(id) { return { send(blob) { const c = byId[id]; if (c && blob) sendStream(c, blob); } }; } };
 })();

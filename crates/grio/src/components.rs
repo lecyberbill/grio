@@ -1178,13 +1178,23 @@ impl Component for Plot {
     }
 }
 
-/// Galerie d'images en grille (affichage et/ou upload multiple).
+/// Galerie d'images en grille (affichage et/ou upload multiple, avec lightbox/zoom).
 #[derive(Clone, Debug)]
 pub struct Gallery {
     id: String,
     label: String,
-    value: Vec<String>,
+    value: Value,
     columns: usize,
+    rows: Option<usize>,
+    height: Option<String>,
+    min_height: Option<String>,
+    max_height: Option<String>,
+    limit: Option<usize>,
+    item_height: Option<String>,
+    item_width: Option<String>,
+    aspect_ratio: Option<String>,
+    object_fit: String,
+    allow_preview: bool,
     interactive: bool,
     upload: bool,
     out: bool,
@@ -1193,22 +1203,69 @@ pub struct Gallery {
 impl Gallery {
     /// Crée une galerie, avec son identifiant. Entrée (upload) par défaut.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), value: Vec::new(), columns: 3, interactive: true, upload: true, out: false }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: json!([]),
+            columns: 3,
+            rows: None,
+            height: None,
+            min_height: None,
+            max_height: None,
+            limit: None,
+            item_height: None,
+            item_width: None,
+            aspect_ratio: None,
+            object_fit: "cover".into(),
+            allow_preview: true,
+            interactive: true,
+            upload: true,
+            out: false,
+        }
     }
-    /// Étiquette affichée au-dessus.
+    /// Étiquette/Titre affiché au-dessus de la galerie.
     pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Alias pour label (titre).
+    pub fn title(mut self, t: impl Into<String>) -> Self { self.label = t.into(); self }
     /// Images initiales (data URLs ou URLs).
     pub fn value(mut self, items: &[&str]) -> Self {
-        self.value = items.iter().map(|s| s.to_string()).collect();
+        let v: Vec<String> = items.iter().map(|s| s.to_string()).collect();
+        self.value = json!(v);
         self
     }
     /// Images initiales depuis une collection de Strings ou Data URLs.
     pub fn items(mut self, items: &[impl AsRef<str>]) -> Self {
-        self.value = items.iter().map(|s| s.as_ref().to_string()).collect();
+        let v: Vec<String> = items.iter().map(|s| s.as_ref().to_string()).collect();
+        self.value = json!(v);
+        self
+    }
+    /// Images initiales depuis une collection d'objets sérialisables (`{image, caption}`).
+    pub fn raw_items(mut self, items: impl serde::Serialize) -> Self {
+        self.value = serde_json::to_value(items).unwrap_or_else(|_| json!([]));
         self
     }
     /// Nombre de colonnes de la grille.
     pub fn columns(mut self, n: usize) -> Self { self.columns = n.max(1); self }
+    /// Nombre de lignes visibles simultanément (active le défilement si plus d'images).
+    pub fn rows(mut self, n: usize) -> Self { self.rows = Some(n.max(1)); self }
+    /// Hauteur fixe ou relative de la galerie (ex: "500px", "60vh", 500.0).
+    pub fn height(mut self, h: impl Into<String>) -> Self { self.height = Some(h.into()); self }
+    /// Hauteur minimale du conteneur de la galerie.
+    pub fn min_height(mut self, mh: impl Into<String>) -> Self { self.min_height = Some(mh.into()); self }
+    /// Hauteur maximale du conteneur avant scrollbar (ex: "650px", "80vh").
+    pub fn max_height(mut self, mh: impl Into<String>) -> Self { self.max_height = Some(mh.into()); self }
+    /// Limite maximale d'images affichées dans la galerie (les plus récentes en premier).
+    pub fn limit(mut self, n: usize) -> Self { self.limit = Some(n); self }
+    /// Hauteur d'une vignette / image de la galerie (ex: "140px", "180px", "220px").
+    pub fn item_height(mut self, ih: impl Into<String>) -> Self { self.item_height = Some(ih.into()); self }
+    /// Largeur d'une vignette / image de la galerie (ex: "180px", "240px").
+    pub fn item_width(mut self, iw: impl Into<String>) -> Self { self.item_width = Some(iw.into()); self }
+    /// Ratio d'aspect d'une vignette (ex: "1/1", "16/9", "4/3", "9/16").
+    pub fn aspect_ratio(mut self, ar: impl Into<String>) -> Self { self.aspect_ratio = Some(ar.into()); self }
+    /// Mode d'ajustement des images (`"cover"`, `"contain"`, `"scale-down"`).
+    pub fn object_fit(mut self, fit: impl Into<String>) -> Self { self.object_fit = fit.into(); self }
+    /// Active la visionneuse / lightbox plein écran au clic (défaut : `true`).
+    pub fn allow_preview(mut self, allow: bool) -> Self { self.allow_preview = allow; self }
     /// Autorise la sélection/upload.
     pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
     /// Affiche le bouton d'ajout d'image.
@@ -1224,7 +1281,23 @@ impl Component for Gallery {
     fn kind(&self) -> &'static str { "gallery" }
     fn role(&self) -> Role { if self.out { Role::Output } else { Role::Input } }
     fn props(&self) -> Value {
-        json!({ "label": self.label, "value": self.value, "columns": self.columns, "interactive": self.interactive, "upload": self.upload })
+        json!({
+            "label": self.label,
+            "value": self.value,
+            "columns": self.columns,
+            "rows": self.rows,
+            "height": self.height,
+            "min_height": self.min_height,
+            "max_height": self.max_height,
+            "limit": self.limit,
+            "item_height": self.item_height,
+            "item_width": self.item_width,
+            "aspect_ratio": self.aspect_ratio,
+            "object_fit": self.object_fit,
+            "allow_preview": self.allow_preview,
+            "interactive": self.interactive,
+            "upload": self.upload
+        })
     }
 }
 

@@ -14,9 +14,9 @@ base64 = "0.22"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
-candle-core = { version = "0.8" }
+candle-core = { version = "0.8", features = ["cuda"] }
 candle-transformers = { version = "0.8" }
-candle-nn = { version = "0.8" }
+candle-nn = { version = "0.8", features = ["cuda"] }
 tokenizers = { version = "0.21", default-features = false, features = ["fancy-regex"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 byteorder = "1.5"
