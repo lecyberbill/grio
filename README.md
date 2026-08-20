@@ -1,4 +1,11 @@
 # ⚙️ grio — A Blazing Fast, Pure Rust Alternative to Gradio
+<img width="1291" height="1170" alt="image" src="https://github.com/user-attachments/assets/cb03e11b-4856-413f-9ca8-facab0de9e4f" />
+
+<img width="1934" height="1189" alt="image" src="https://github.com/user-attachments/assets/ad39a3aa-a124-4523-b253-409518b12347" />
+
+<img width="774" height="487" alt="image" src="https://github.com/user-attachments/assets/963ed96f-20cd-4452-99b7-4bb2bfd7a6a4" />
+
+<img width="555" height="275" alt="image" src="https://github.com/user-attachments/assets/acef02f0-4818-4892-947d-c237dd8c7cc9" />
 
 **grio** is a declarative web framework for Rust AI, ML, and data applications. Define **components** and **event handlers** in pure Rust, and grio instantly serves:
 1. **A modern, reactive real-time Web UI** (CSS3 + Vanilla JS, zero frontend dependencies, zero npm build).
