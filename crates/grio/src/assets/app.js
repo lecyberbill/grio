@@ -1076,6 +1076,8 @@
           g.beginPath(); g.arc(BGW * 0.3, BGH * 0.4, BGH * 0.25, 0, Math.PI * 2); g.fill();
           g.fillStyle = 'rgba(245,158,11,0.16)';
           g.beginPath(); g.arc(BGW * 0.72, BGH * 0.62, BGH * 0.3, 0, Math.PI * 2); g.fill();
+          layers.splice(0, layers.length);
+          for (let i = 0; i < nLayers; i++) layers.push(mkLayer(BGW, BGH));
           fin();
           return;
         }
