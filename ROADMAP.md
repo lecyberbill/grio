@@ -358,6 +358,36 @@ l'**inpainting** côté serveur. Fond par défaut en dégradé si pas d'image.
 
 ---
 
+## Phase 7 — Files & Utility Widgets · ✅
+
+> **Delivered.** Six Gradio-style widgets written end-to-end in English
+> (frontend still zero-dependency: CSS3 + vanilla JS, no build step):
+> `Number` (numeric field with bounds and a ± stepper, `f64` input),
+> `Label` (result badge with semantic color), `Json` (live-validated JSON
+> editor / `.output()` viewer), `Timer` (periodic clock that emits `change`
+> each tick, so `on_change("id")` runs on a schedule), `File` (multi-upload
+> with drag & drop, MIME filter, size cap, upload progress bar and removable
+> list), `DownloadButton` (server-triggered download from a data URL or a
+> `{b64, mime}` object pushed via `ctx.set`).
+> Verified: build + docs zero warnings, `node --check` green, the `forms`
+> demo renders the new panel and all WS scenarios pass.
+
+### 7.1 Components (`Number`, `Label`, `Json`, `Timer`, `File`, `DownloadButton`) · ✅
+- All six are fully configurable through builders and readable from
+  handlers: `f64` (`Number`), `String` (`Label`), `serde_json::Value`
+  (`Json`), elapsed seconds in `ctx.event().d` (`Timer`), and
+  `Vec<serde_json::Value>` of `{name, size, mime, data_url}` (`File`).
+- **Files**: `components.rs` (6 structs + rustdoc), `app.js` (6 registers),
+  `styles.css` (Phase 7 block), `lib.rs` (re-exports), `server.rs`
+  (no change — generic rendering), `forms.rs` (demo + handlers)
+- **Accepted when**: `examples/forms.rs` — panel « Phase 7 — Files &
+  Utilities »; the `Timer` ticks every 3 s and updates a `Label` through
+  `on_change("clock")`; « Generate CSV » pushes `{ b64, mime }` into the
+  `DownloadButton`; `on_submit` reads `numcpu`, `jsondoc` and `docs`
+  (verified over WebSocket and in the served HTML).
+
+---
+
 ## Roadmap Conventions
 
 1. One task = one checked box + an entry in `README.md`.

@@ -38,9 +38,9 @@ pub mod server;
 pub use app::{App, Theme, ThemeMode};
 pub use components::{
     Accordion, Audio, Button, ChatMessage, Chatbot, Checkbox, Code, Column, Component, Dataframe,
-    DatePicker, Dropdown, Explorer, Gallery, Grid, Image, ImageEditor, IntoBox, Layout, Markdown,
-    Metric, Output, Panel, Plot, Progress, Role, Row, SectionBuilder, Slider, SortableList, Tabs,
-    Text, TimePicker, Video, WithLayout,
+    DatePicker, DownloadButton, Dropdown, Explorer, File, Gallery, Grid, Image, ImageEditor,
+    IntoBox, Json, Label, Layout, Markdown, Metric, Number, Output, Panel, Plot, Progress, Role,
+    Row, SectionBuilder, Slider, SortableList, Tabs, Text, TimePicker, Timer, Video, WithLayout,
 };
 pub use context::{AlertLevel, Context};
 pub use events::EventName;

@@ -335,6 +335,100 @@ Gallery::new("generated_images")
 
 ---
 
+## Utility Components (Phase 7)
+
+### `Number`
+Numeric field with min/max/step bounds and a ± stepper.
+
+```rust
+Number::new("epochs")
+    .label("Training Epochs")
+    .value(3.0)
+    .min(0.0)
+    .max(16.0)
+    .step(1.0)
+```
+
+- **Data format**: `f64` via `ctx.get::<f64>("epochs")?`.
+
+---
+
+### `Label`
+A Gradio-style output label with a semantic color badge.
+
+```rust
+Label::new("accuracy")
+    .label("Accuracy")
+    .value("97.4%")
+    .variant("success")   // normal | success | warning | danger | off
+```
+
+- Update on the server with `ctx.set("accuracy", "98.1%")`.
+
+---
+
+### `Json`
+Live-validated JSON **editor** (input, default) or pretty **viewer** (`.output()`); a valid edit emits a `change` carrying the parsed object.
+
+```rust
+Json::new("params").label("Parameters").value(json!({ "model": "qwen", "top_k": 40 }))
+```
+
+- **Data format**: `serde_json::Value` via `ctx.get::<serde_json::Value>("params")?`.
+
+---
+
+### `Timer`
+Periodic clock (`gr.Timer` equivalent): emits a `change` every `interval` seconds.
+The elapsed seconds are exposed in `ctx.event().d`, so `on_change("id")` runs on a schedule (refreshes, polling).
+
+```rust
+Timer::new("clock").label("Heartbeat").interval(2.0)
+```
+
+```rust
+.on_change("clock", |ctx| {
+    let t = ctx.event().and_then(|e| e.d.clone()).and_then(|d| d.as_f64()).unwrap_or(0.0);
+    ctx.set("heartbeat", format!("{t:.1} s"));
+    Ok(())
+})
+```
+
+---
+
+### `File`
+Multi-file upload with drag & drop, MIME type filter, size limit, upload progress bar and a removable list.
+
+```rust
+File::new("attachments")
+    .label("Attachments")
+    .types(&["image/*", "application/pdf"])
+    .max_size(4 * 1024 * 1024)
+    .multiple(true)
+```
+
+- **Data format**: array of `{ name, size, mime, data_url }` objects via
+  `ctx.get::<Vec<serde_json::Value>>("attachments")?`.
+
+---
+
+### `DownloadButton`
+Server-triggered download: push a data URL (or a `{ b64, mime }` object) with `ctx.set` to activate the button; a click downloads it under the configured filename.
+
+```rust
+DownloadButton::new("report").label("Download CSV").filename("report.csv")
+```
+
+```rust
+.on_click("generate", |ctx| {
+    let csv = "a,b,c\n1,2,3\n".to_string();
+    ctx.set("report", json!({ "b64": base64_encode(csv), "mime": "text/csv" }));
+    Ok(())
+})
+```
+
+---
+
 ## Media Components (Vision & Audio)
 
 ### `Image` & `ImageEditor`

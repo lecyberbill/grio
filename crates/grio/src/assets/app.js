@@ -271,6 +271,323 @@
     }
   });
 
+  /* ---------- Phase 7: Number / Label / JSON / Timer / File / Download ---------- */
+
+  register('number', {
+    mount(c) {
+      const p = c.props;
+      const id = 'f_' + c.id;
+      const step = p.step || 1;
+      const min = p.min != null ? p.min : 0;
+      const max = p.max != null ? p.max : 1e6;
+      const clamp = (v) => Math.min(max, Math.max(min, Number.isFinite(v) ? v : min));
+      const snap = (v) => {
+        const r = Math.round((clamp(v) - min) / step) * step + min;
+        return Number(r.toFixed(10));
+      };
+      c.el.innerHTML = makeLabel(p, c) +
+        '<div class="mg-num" data-id="' + id + '">' +
+          '<button type="button" class="mg-btn mg-btn-secondary mg-num-btn" data-d="-1" title="' + t('num_step_down') + '" aria-label="' + t('num_step_down') + '">−</button>' +
+          '<input class="mg-input mg-num-input" id="' + id + '" type="number" step="' + step + '" min="' + min + '" max="' + max + '" value="' + p.value + '" autocomplete="off">' +
+          '<button type="button" class="mg-btn mg-btn-secondary mg-num-btn" data-d="1" title="' + t('num_step_up') + '" aria-label="' + t('num_step_up') + '">+</button>' +
+          (p.unit ? '<span class="mg-num-unit">' + esc(p.unit) + '</span>' : '') +
+        '</div>';
+      const decBtn = c.el.querySelector('[data-d="-1"]');
+      const incBtn = c.el.querySelector('[data-d="1"]');
+      const setStepTitles = () => {
+        decBtn.title = t('num_step_down'); decBtn.setAttribute('aria-label', t('num_step_down'));
+        incBtn.title = t('num_step_up'); incBtn.setAttribute('aria-label', t('num_step_up'));
+      };
+      setStepTitles();
+      onI18n(setStepTitles);
+      const input = c.el.querySelector('.mg-num-input');
+      const setVal = (v) => { input.value = snap(v); };
+      const fire = () => { const v = snap(parseFloat(input.value)); input.value = v; emit(c, 'change', v); };
+      if (p.interactive === false) { input.disabled = true; c.el.classList.add('mg-disabled'); }
+      input.addEventListener('input', fire);
+      c.el.querySelectorAll('.mg-num-btn').forEach((b) => b.addEventListener('click', () => {
+        const v = snap(parseFloat(input.value) + step * +(b.dataset.d));
+        input.value = v; emit(c, 'change', v);
+      }));
+      c.getValue = () => snap(parseFloat(input.value));
+      c.apply = (patch) => { if (patch.value != null) setVal(Number(patch.value)); };
+    }
+  });
+
+  register('label', {
+    mount(c) {
+      const p = c.props;
+      const card = document.createElement('div');
+      card.className = 'mg-label-card';
+      card.innerHTML =
+        '<div class="mg-card-label">' + esc(p.label || c.id) + '</div>' +
+        '<div class="mg-label-value mg-label-var-' + esc(p.variant || 'normal') + '"></div>';
+      c.el.appendChild(card);
+      const val = card.querySelector('.mg-label-value');
+      val.style.fontSize = (p.size || 26) + 'px';
+      val.textContent = p.value ?? '';
+      c.apply = (patch) => {
+        if (patch.value != null) val.textContent = patch.value;
+        if (patch.variant != null) val.className = 'mg-label-value mg-label-var-' + esc(patch.variant);
+        if (patch.label != null) {
+          const l = card.querySelector('.mg-card-label');
+          if (l) l.textContent = patch.label;
+        }
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('json', {
+    mount(c) {
+      const p = c.props;
+      const interactive = p.interactive !== false;
+      const stringify = (v) => (v == null ? '' : JSON.stringify(v, null, 2));
+      const box = document.createElement('div');
+      box.className = 'mg-json';
+      box.innerHTML = makeLabel(p, c) +
+        (interactive ? '<textarea class="mg-input mg-json-text" rows="10" spellcheck="false"></textarea>'
+                     : '<pre class="mg-json-view"></pre>') +
+        (interactive ? '<div class="mg-hint"></div>' : '');
+      c.el.appendChild(box);
+      const text = box.querySelector('.mg-json-text') || box.querySelector('.mg-json-view');
+      const hint = box.querySelector('.mg-hint');
+      const show = (v) => {
+        if (interactive) { text.value = stringify(v); } else { text.textContent = stringify(v); }
+      };
+      const mark = (ok) => {
+        lastOk = ok;
+        text.classList.toggle('mg-json-ok', ok);
+        text.classList.toggle('mg-json-bad', !ok);
+        if (hint) hint.textContent = ok ? t('json_valid') : t('json_invalid');
+      };
+      let lastOk = true;
+      onI18n(() => mark(lastOk));
+      if (interactive) {
+        show(p.value ?? null);
+        mark(true);
+        text.addEventListener('input', () => {
+          const raw = text.value.trim();
+          if (!raw) { mark(true); return; }
+          try { const v = JSON.parse(raw); mark(true); emit(c, 'change', v); }
+          catch { mark(false); }
+        });
+        c.getValue = () => { try { return JSON.parse(text.value.trim() || 'null'); } catch { return null; } };
+        c.apply = (patch) => {
+          if (patch.value != null) {
+            let v = patch.value;
+            if (typeof v === 'string' && v.trim()) { try { v = JSON.parse(v); } catch { v = patch.value; } }
+            if (text.value.trim()) {
+              try {
+                const cur = JSON.parse(text.value.trim());
+                if (JSON.stringify(cur) === JSON.stringify(v)) return;
+              } catch { /* reformate quand même */ }
+            }
+            show(v); mark(true);
+          }
+        };
+      } else {
+        show(p.value ?? null);
+        c.apply = (patch) => {
+          if (patch.value != null) {
+            let v = patch.value;
+            if (typeof v === 'string') { try { v = JSON.parse(v); } catch { /* garde la chaîne */ } }
+            show(v);
+          }
+        };
+      }
+    }
+  });
+
+  register('timer', {
+    mount(c) {
+      const p = c.props;
+      const iv = Math.max(50, (p.interval || 1) * 1000);
+      const box = document.createElement('div');
+      box.className = 'mg-timer';
+      box.innerHTML = makeLabel(p, c) + '<div class="mg-timer-value">0.0 s</div>';
+      c.el.appendChild(box);
+      const out = box.querySelector('.mg-timer-value');
+      let running = p.running !== false;
+      let t0 = performance.now();
+      const elapsed = () => (performance.now() - t0) / 1000;
+      const render = () => { out.textContent = elapsed().toFixed(1) + ' s'; };
+      const tick = () => {
+        render();
+        emit(c, 'change', elapsed());
+      };
+      render();
+      let handle = null;
+      if (running) handle = setInterval(tick, iv);
+      c.apply = (patch) => {
+        if (patch.running != null && !!patch.running !== running) {
+          running = !!patch.running;
+          if (running) {
+            t0 = performance.now() - elapsed() * 1000;
+            if (!handle) handle = setInterval(tick, iv);
+          } else if (handle) {
+            clearInterval(handle); handle = null;
+          }
+        }
+      };
+    }
+  });
+
+  function fmtBytes(n) {
+    if (n < 1024) return n + ' o';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' Ko';
+    return (n / 1048576).toFixed(1) + ' Mo';
+  }
+
+  register('file', {
+    mount(c) {
+      const p = c.props;
+      const interactive = p.interactive !== false;
+      const types = p.types || [];
+      const maxSize = p.max_size || 0;
+      const list = [];
+      const box = document.createElement('div');
+      box.className = 'mg-file' + (interactive ? ' mg-file-drop' : '');
+      c.el.appendChild(box);
+      box.insertAdjacentHTML('beforeend', makeLabel(p, c));
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.hidden = true;
+      if (p.multiple !== false) input.multiple = true;
+      if (types.length) input.accept = types.join(',');
+      box.appendChild(input);
+      const items = document.createElement('div');
+      items.className = 'mg-file-list';
+      box.appendChild(items);
+      const render = () => {
+        items.innerHTML = list.map((f, i) =>
+          '<div class="mg-file-item">' +
+            '<span class="mg-file-item-name">' + esc(f.name) + '</span>' +
+            '<span class="mg-file-item-size">' + fmtBytes(f.size) + '</span>' +
+            (interactive ? '<button type="button" class="mg-btn mg-btn-secondary mg-file-del" data-i="' + i + '" title="' + t('file_remove') + '">×</button>' : '') +
+          '</div>').join('');
+        items.querySelectorAll('.mg-file-del').forEach((b) => b.addEventListener('click', () => {
+          list.splice(+(b.dataset.i), 1);
+          render();
+          emit(c, 'change', list.slice());
+        }));
+      };
+      const emitList = () => emit(c, 'change', list.slice());
+      if (interactive) {
+        const dz = document.createElement('div');
+        dz.className = 'mg-file-dropzone';
+        dz.innerHTML = '<span class="mg-file-icon">📁</span><span class="mg-file-drop-text"></span>';
+        box.appendChild(dz);
+        const dropText = dz.querySelector('.mg-file-drop-text');
+        const setDropText = () => { dropText.textContent = t('file_drop'); };
+        setDropText();
+        onI18n(setDropText);
+        const prog = document.createElement('div');
+        prog.className = 'mg-file-progress';
+        prog.hidden = true;
+        prog.innerHTML = '<div class="mg-file-progress-bar"><i></i></div><span class="mg-file-progress-txt">0%</span>';
+        box.appendChild(prog);
+        const bar = prog.querySelector('.mg-file-progress-bar');
+        const pct = prog.querySelector('.mg-file-progress-txt');
+        const addFiles = (files) => {
+          const acc = [];
+          for (const f of Array.from(files)) {
+            if (types.some((t) => t.endsWith('/*') ? f.type.startsWith(t.slice(0, -1)) : f.type === t)) {}
+            if (types.length && !types.some((tp) => tp.endsWith('/*') ? f.type.startsWith(tp.slice(0, -1)) : f.type === tp)) {
+              toast(t('file_type_bad') + ' : ' + f.name, 'error'); continue;
+            }
+            if (maxSize && f.size > maxSize) {
+              toast(t('file_too_big') + ' : ' + f.name, 'error'); continue;
+            }
+            acc.push(f);
+          }
+          if (!acc.length) return;
+          const total = acc.length;
+          let done = 0;
+          prog.hidden = false;
+          const next = () => {
+            const f = acc.shift();
+            if (!f) { prog.hidden = true; render(); emitList(); return; }
+            const r = new FileReader();
+            r.onprogress = (e) => {
+              if (e.lengthComputable) {
+                const v = Math.round(((done + e.loaded / e.total) / total) * 100);
+                pct.textContent = v + '%';
+                bar.style.width = v + '%';
+              }
+            };
+            r.onload = () => {
+              list.push({ name: f.name, size: f.size, mime: f.type || 'application/octet-stream', data_url: String(r.result) });
+              done++;
+              pct.textContent = Math.round((done / total) * 100) + '%';
+              bar.style.width = Math.round((done / total) * 100) + '%';
+              next();
+            };
+            r.readAsDataURL(f);
+          };
+          next();
+        };
+        dz.addEventListener('click', () => input.click());
+        dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('hover'); });
+        dz.addEventListener('dragleave', () => dz.classList.remove('hover'));
+        dz.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dz.classList.remove('hover');
+          addFiles(e.dataTransfer.files);
+        });
+        input.addEventListener('change', () => {
+          if (input.files && input.files.length) addFiles(input.files);
+          input.value = '';
+        });
+      }
+      c.getValue = () => list.slice();
+      c.apply = (patch) => {
+        if (patch.visible != null) box.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('download', {
+    mount(c) {
+      const p = c.props;
+      let filename = p.filename || 'download.bin';
+      let labelSrc = p.label || '';
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mg-btn';
+      const renderLabel = () => { b.innerHTML = '⤓ ' + esc(labelSrc || t('download_label')); };
+      renderLabel();
+      c.el.appendChild(b);
+      const resolve = (v) => {
+        if (!v) return '';
+        if (typeof v === 'string' && v.startsWith('data:')) return v;
+        if (typeof v === 'string') return 'data:application/octet-stream;base64,' + v;
+        if (v && typeof v === 'object') return 'data:' + (v.mime || 'application/octet-stream') + ';base64,' + (v.b64 || '');
+        return '';
+      };
+      let href = resolve(p.value);
+      const refresh = () => { b.disabled = !href; };
+      refresh();
+      b.addEventListener('click', (ev) => {
+        emit(c, 'click', null);
+        if (!href) return;
+        const a = document.createElement('a');
+        a.href = href;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      });
+      onI18n(renderLabel);
+      c.apply = (patch) => {
+        if (patch.value != null) { href = resolve(patch.value); refresh(); }
+        if (patch.filename != null) filename = patch.filename;
+        if (patch.label != null) { labelSrc = patch.label; renderLabel(); }
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
   /* ---------- média ---------- */
 
   function dataUrl(v) { return typeof v === 'string' && v.length ? v : ''; }
@@ -436,17 +753,19 @@
 
       let zoom = 1, tx = 0, ty = 0, tool = 'brush', color = '#e11d48', size = 8;
       let drawing = null;
-      const scaleCv = () => {
-        const w = Math.max(1, Math.round(BGW * zoom)), h = Math.max(1, Math.round(BGH * zoom));
+      const scaleCv = (aw, ah) => {
+        const w = Math.max(1, Math.round(aw)), h = Math.max(1, Math.round(ah));
         view.width = w; view.height = h; view.style.width = w + 'px'; view.style.height = h + 'px';
         ovl.width = w; ovl.height = h; ovl.style.width = w + 'px'; ovl.style.height = h + 'px';
       };
       const fit = () => {
-        const availW = stage.clientWidth - 4, availH = Math.max(120, stage.clientHeight - 4);
+        const availW = Math.max(80, stage.clientWidth - 4), availH = Math.max(120, stage.clientHeight - 4);
         zoom = Math.min(availW / BGW, availH / BGH, 4);
         zoom = Math.max(zoom, 0.05);
         tx = (availW - BGW * zoom) / 2; ty = (availH - BGH * zoom) / 2;
-        scaleCv();
+        scaleCv(availW, availH);
+        draw();
+        clearOvl();
       };
       const draw = () => {
         vctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -739,7 +1058,7 @@
         tx = ev.clientX - r.left - mx * (nz / zoom);
         ty = ev.clientY - r.top - my * (nz / zoom);
         zoom = nz;
-        scaleCv(); draw(); clearOvl();
+        scaleCv(r.width, r.height); draw(); clearOvl();
       });
 
       let bgInit = dataUrl(p.value) || null;
@@ -2014,6 +2333,15 @@
       add_row: "+ Add Row",
       empty_chat: "Start the conversation...",
       model_weights_loaded: "Model weights loaded successfully",
+      file_drop: "Click or drop files here",
+      file_remove: "remove",
+      file_type_bad: "type not allowed",
+      file_too_big: "file too large",
+      json_valid: "Valid JSON",
+      json_invalid: "Invalid JSON",
+      download_label: "Download",
+      num_step_down: "decrease",
+      num_step_up: "increase",
     },
     fr: {
       use_api: "Utiliser via API",
@@ -2033,6 +2361,15 @@
       add_row: "+ Ajouter une ligne",
       empty_chat: "Commencez la conversation...",
       model_weights_loaded: "Poids du modèle chargés avec succès",
+      file_drop: "Cliquez ou glissez des fichiers ici",
+      file_remove: "retirer",
+      file_type_bad: "type non autorisé",
+      file_too_big: "fichier trop volumineux",
+      json_valid: "JSON valide",
+      json_invalid: "JSON invalide",
+      download_label: "Télécharger",
+      num_step_down: "diminuer",
+      num_step_up: "augmenter",
     },
     es: {
       use_api: "Usar vía API",
@@ -2052,6 +2389,15 @@
       add_row: "+ Añadir fila",
       empty_chat: "Comience la conversación...",
       model_weights_loaded: "Pesos del modelo cargados con éxito",
+      file_drop: "Haga clic o arrastre archivos aquí",
+      file_remove: "quitar",
+      file_type_bad: "tipo no permitido",
+      file_too_big: "archivo demasiado grande",
+      json_valid: "JSON válido",
+      json_invalid: "JSON no válido",
+      download_label: "Descargar",
+      num_step_down: "disminuir",
+      num_step_up: "aumentar",
     },
     de: {
       use_api: "Über API nutzen",
@@ -2071,6 +2417,15 @@
       add_row: "+ Zeile hinzufügen",
       empty_chat: "Beginnen Sie das Gespräch...",
       model_weights_loaded: "Modellgewichte erfolgreich geladen",
+      file_drop: "Klicken oder Dateien hierher ziehen",
+      file_remove: "entfernen",
+      file_type_bad: "Typ nicht erlaubt",
+      file_too_big: "Datei zu groß",
+      json_valid: "gültiges JSON",
+      json_invalid: "ungültiges JSON",
+      download_label: "Herunterladen",
+      num_step_down: "verringern",
+      num_step_up: "erhöhen",
     }
   };
 
@@ -2081,12 +2436,16 @@
     return dict[key] || (I18N.en && I18N.en[key]) || fallback || key;
   }
 
+  const i18nHooks = [];
+  function onI18n(fn) { i18nHooks.push(fn); }
+
   function applyTranslations() {
     document.querySelectorAll('[data-i18n]').forEach((el) => {
       const key = el.dataset.i18n;
       const text = t(key);
       if (text) el.textContent = text;
     });
+    i18nHooks.forEach((fn) => { try { fn(); } catch { /* garde-fou */ } });
   }
 
   function setLanguage(lang) {

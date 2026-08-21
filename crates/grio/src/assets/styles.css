@@ -1203,7 +1203,7 @@ body {
 .mg-ie-stage {
   position: relative; min-height: 220px; overflow: hidden;
   border: 1px solid var(--mg-border); border-radius: 12px;
-  background: repeating-conic-gradient(var(--mg-surface-2) 0% 25%, #eceef5 0% 50%) 0 0 / 18px 18px;
+  background: repeating-conic-gradient(#525252 0% 25%, #292828 0% 50%) 0 0 / 10px 10px;
 }
 .mg-ie-canvas { display: block; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); touch-action: none; }
 .mg-ie-stage.hover { outline: 2px dashed var(--mg-accent); outline-offset: -4px; }
@@ -1800,3 +1800,95 @@ body {
   .mg-flash { animation: none; }
   * { transition: none !important; }
 }
+
+/* ---------- Phase 7: Number / Label / JSON / Timer / File / Download ---------- */
+
+.mg-num { display: flex; align-items: center; gap: 6px; }
+.mg-num-input { flex: 1; min-width: 0; }
+.mg-num-btn { flex: 0 0 auto; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: 0; font-size: 1.05rem; }
+.mg-num-unit { color: var(--mg-muted); font-size: 0.9rem; white-space: nowrap; }
+
+.mg-label-card {
+  background: var(--mg-surface);
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-radius-sm);
+  padding: 10px 14px;
+  box-shadow: var(--mg-shadow);
+}
+.mg-label-value { font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.mg-label-var-normal { color: var(--mg-text); }
+.mg-label-var-success { color: var(--mg-success); }
+.mg-label-var-warning { color: #d97706; }
+.mg-label-var-danger { color: var(--mg-danger); }
+.mg-label-var-off { color: var(--mg-muted); }
+
+.mg-json-view,
+.mg-json-text {
+  font-family: var(--mg-mono);
+  font-size: 0.86rem;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+}
+.mg-json-view {
+  background: color-mix(in srgb, var(--mg-bg) 60%, var(--mg-surface));
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-radius-sm);
+  padding: 12px 14px;
+  margin: 0;
+  color: var(--mg-text);
+}
+.mg-json-text { resize: vertical; }
+.mg-json-text.mg-json-ok { border-color: var(--mg-success); }
+.mg-json-text.mg-json-bad { border-color: var(--mg-danger); box-shadow: 0 0 0 3px rgba(228, 87, 46, 0.18); }
+.mg-json .mg-json-ok { color: var(--mg-success); }
+.mg-json .mg-json-bad { color: var(--mg-danger); }
+
+.mg-timer-value {
+  font-family: var(--mg-mono);
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--mg-accent);
+  padding: 12px 16px;
+  background: var(--mg-accent-soft);
+  border-radius: var(--mg-radius-sm);
+  text-align: center;
+}
+
+.mg-file-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px;
+  border: 1.5px dashed var(--mg-border-strong);
+  border-radius: var(--mg-radius-sm);
+  color: var(--mg-muted);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.mg-file-dropzone:hover, .mg-file-dropzone.hover {
+  border-color: var(--mg-accent);
+  background: var(--mg-accent-soft);
+  color: var(--mg-text);
+}
+.mg-file-icon { font-size: 1.2rem; }
+.mg-file-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.mg-file-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--mg-surface);
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-radius-sm);
+  padding: 8px 12px;
+  font-size: 0.88rem;
+}
+.mg-file-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mg-file-item-size { color: var(--mg-muted); font-variant-numeric: tabular-nums; }
+.mg-file-del { flex: 0 0 auto; width: 26px; height: 26px; padding: 0; line-height: 1; }
+.mg-file-progress { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.mg-file-progress-bar { flex: 1; height: 6px; border-radius: 999px; background: var(--mg-accent-soft); overflow: hidden; }
+.mg-file-progress-bar i { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--mg-accent); transition: width 120ms ease; }
+.mg-file-progress-txt { font-size: 0.8rem; color: var(--mg-muted); font-variant-numeric: tabular-nums; min-width: 36px; text-align: right; }

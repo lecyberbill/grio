@@ -1578,3 +1578,262 @@ impl Component for Metric {
         })
     }
 }
+
+/// **Number** field (`gr.Number` equivalent): direct numeric entry with
+/// min/max/step bounds and a ± stepper. Emits a `change` with the numeric
+/// value (clamped and snapped to `step`) — read it back via
+/// `ctx.get::<f64>`.
+#[derive(Clone, Debug)]
+pub struct Number {
+    id: String,
+    label: String,
+    value: f64,
+    min: f64,
+    max: f64,
+    step: f64,
+    unit: String,
+    interactive: bool,
+}
+
+impl Number {
+    /// Creates a number field with its identifier.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: 0.0,
+            min: 0.0,
+            max: 1.0e6,
+            step: 1.0,
+            unit: String::new(),
+            interactive: true,
+        }
+    }
+    /// Label displayed above the field.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Initial value.
+    pub fn value(mut self, v: f64) -> Self { self.value = v; self }
+    /// Lower bound (default: `0`).
+    pub fn min(mut self, v: f64) -> Self { self.min = v; self }
+    /// Upper bound (default: `1e6`).
+    pub fn max(mut self, v: f64) -> Self { self.max = v; self }
+    /// Stepper increment (default: `1`).
+    pub fn step(mut self, v: f64) -> Self { self.step = v; self }
+    /// Unit shown next to the value (e.g. `"€"`, `"ms"`).
+    pub fn unit(mut self, u: impl Into<String>) -> Self { self.unit = u.into(); self }
+    /// Enables or disables editing (frozen if `false`).
+    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+}
+
+impl Component for Number {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "number" }
+    fn role(&self) -> Role { Role::Input }
+    fn props(&self) -> Value {
+        json!({
+            "label": self.label, "value": self.value, "min": self.min,
+            "max": self.max, "step": self.step, "unit": self.unit,
+            "interactive": self.interactive
+        })
+    }
+}
+
+/// Result **Label** (`gr.Label` equivalent): a prominent value with a
+/// semantic color. Update it through `ctx.set("id", "value")`.
+#[derive(Clone, Debug)]
+pub struct Label {
+    id: String,
+    label: String,
+    value: String,
+    variant: String,
+    size: u32,
+}
+
+impl Label {
+    /// Creates a label with its identifier. Output by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self { id: id.into(), label: String::new(), value: String::new(), variant: "normal".into(), size: 26 }
+    }
+    /// Title shown above the value.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Initial value.
+    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    /// Semantic color: `normal`, `success`, `warning`, `danger` or `off`.
+    pub fn variant(mut self, v: impl Into<String>) -> Self { self.variant = v.into(); self }
+    /// Font size of the value in pixels (default: `26`).
+    pub fn size(mut self, px: u32) -> Self { self.size = px; self }
+}
+
+impl Component for Label {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "label" }
+    fn role(&self) -> Role { Role::Output }
+    fn props(&self) -> Value {
+        json!({ "label": self.label, "value": self.value, "variant": self.variant, "size": self.size })
+    }
+}
+
+/// **JSON** viewer/editor: the server reads the parsed object via
+/// `ctx.get::<serde_json::Value>`, the client validates the syntax live and
+/// only emits a `change` when the document is valid.
+#[derive(Clone, Debug)]
+pub struct Json {
+    id: String,
+    label: String,
+    value: Value,
+    interactive: bool,
+    out: bool,
+}
+
+impl Json {
+    /// Creates a JSON component with its identifier. Editor by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self { id: id.into(), label: String::new(), value: Value::Null, interactive: true, out: false }
+    }
+    /// Label displayed above.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Initial JSON value (object, array or scalar).
+    pub fn value(mut self, v: Value) -> Self { self.value = v; self }
+    /// Initial value from a JSON string (ignored when not parseable).
+    pub fn value_str(mut self, s: &str) -> Self {
+        if let Ok(v) = serde_json::from_str(s) { self.value = v; }
+        self
+    }
+    /// Enables or disables editing (read-only if `false`).
+    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    /// Declares the component **output** (plain viewer).
+    pub fn output(mut self) -> Self { self.out = true; self }
+    /// Declares the component **input** (editor — default).
+    pub fn input(mut self) -> Self { self.out = false; self }
+}
+
+impl Component for Json {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "json" }
+    fn role(&self) -> Role { if self.out { Role::Output } else { Role::Input } }
+    fn props(&self) -> Value {
+        json!({
+            "label": self.label, "value": self.value, "interactive": self.interactive
+        })
+    }
+}
+
+/// Periodic **Timer** (`gr.Timer` equivalent): counts elapsed seconds and
+/// emits a `change` at every interval — so `on_change("id")` runs on a
+/// schedule, useful for refreshes or polling jobs. The timestamp (=
+/// elapsed seconds) is exposed in `ctx.event().d`.
+#[derive(Clone, Debug)]
+pub struct Timer {
+    id: String,
+    label: String,
+    interval: f64,
+    running: bool,
+}
+
+impl Timer {
+    /// Creates a timer with its identifier. Output by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self { id: id.into(), label: String::new(), interval: 1.0, running: true }
+    }
+    /// Label displayed.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Tick interval in seconds (default: `1`).
+    pub fn interval(mut self, s: f64) -> Self { self.interval = s.max(0.05); self }
+    /// Starts the timer on mount (default: `true`).
+    pub fn running(mut self, on: bool) -> Self { self.running = on; self }
+}
+
+impl Component for Timer {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "timer" }
+    fn role(&self) -> Role { Role::Output }
+    fn props(&self) -> Value {
+        json!({ "label": self.label, "interval": self.interval, "running": self.running })
+    }
+}
+
+/// **File** component (`gr.File` equivalent): multi-file upload (click or
+/// drag & drop), MIME type filter, size limit, upload progress bar and an
+/// editable list (remove entries). The value emitted on `change` is an array
+/// of `{name, size, mime, data_url}` objects:
+///
+/// ```json
+/// [{ "name": "photo.png", "size": 184, "mime": "image/png", "data_url": "data:image/png;base64,…" }]
+/// ```
+///
+/// Read it via `ctx.get::<Vec<serde_json::Value>>("id")` (or
+/// `ctx.get::<serde_json::Value>`).
+#[derive(Clone, Debug)]
+pub struct File {
+    id: String,
+    label: String,
+    multiple: bool,
+    types: Vec<String>,
+    max_size: u64,
+    interactive: bool,
+}
+
+impl File {
+    /// Creates a file component with its identifier. Input by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self { id: id.into(), label: String::new(), multiple: true, types: Vec::new(), max_size: 0, interactive: true }
+    }
+    /// Label displayed above.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Allows multi-file selection (default: `true`).
+    pub fn multiple(mut self, on: bool) -> Self { self.multiple = on; self }
+    /// Accepted MIME types (default: any). E.g. `&["image/*", "application/pdf"]`.
+    pub fn types(mut self, t: &[&str]) -> Self {
+        self.types = t.iter().map(|s| s.to_string()).collect();
+        self
+    }
+    /// Maximum size per file in bytes (`0` = unlimited, default).
+    pub fn max_size(mut self, n: u64) -> Self { self.max_size = n; self }
+    /// Enables or disables upload (read-only list if `false`).
+    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+}
+
+impl Component for File {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "file" }
+    fn role(&self) -> Role { Role::Input }
+    fn props(&self) -> Value {
+        json!({
+            "label": self.label, "multiple": self.multiple, "types": self.types,
+            "max_size": self.max_size, "interactive": self.interactive
+        })
+    }
+}
+
+/// **Download** button (`gr.DownloadButton` equivalent): once the server
+/// pushes a value (data URL) through `ctx.set("id", url)`, the button
+/// activates and downloads the content under the configured filename.
+#[derive(Clone, Debug)]
+pub struct DownloadButton {
+    id: String,
+    label: String,
+    filename: String,
+    value: String,
+}
+
+impl DownloadButton {
+    /// Creates a download button with its identifier. Output.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self { id: id.into(), label: String::new(), filename: "download.bin".into(), value: String::new() }
+    }
+    /// Button label.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Suggested download filename (default: `download.bin`).
+    pub fn filename(mut self, n: impl Into<String>) -> Self { self.filename = n.into(); self }
+    /// Initial content as a data URL (or bare base64 → normalized at render).
+    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+}
+
+impl Component for DownloadButton {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "download" }
+    fn role(&self) -> Role { Role::Output }
+    fn props(&self) -> Value {
+        json!({ "label": self.label, "filename": self.filename, "value": self.value })
+    }
+}

@@ -36,7 +36,7 @@
               └─────────────────────────────┘
 ```
 
-> 📖 **Full Component Reference**: See [COMPONENTS.md](COMPONENTS.md) for detailed APIs, parameters, and code examples for all 25+ built-in widgets.
+> 📖 **Full Component Reference**: See [COMPONENTS.md](COMPONENTS.md) for detailed APIs, parameters, and code examples for all 30+ built-in widgets.
 
 ---
 
@@ -88,7 +88,7 @@ cargo run -p grio --example greet
 | **Multimodal AI Studio** | `cargo run -p grio --example prompt_to_image` | Autoregressive LLM (Candle Qwen 2.5 7B GGUF) + SDXL Image Diffusion + Live Analytics Dataframe & Plots |
 | **Chatbot** | `cargo run -p grio --example chatbot` | Conversational Chatbot widget with token-by-token streaming |
 | **Media & Vision** | `cargo run -p grio --example media` | Image, Audio (live mic streaming), Video (live camera streaming) |
-| **Rich Forms & Controls** | `cargo run -p grio --example forms` | Sliders, Checkboxes, Dropdowns, Date/TimePickers, Dataframes, Plots, Code Editors |
+| **Rich Forms & Controls** | `cargo run -p grio --example forms` | Sliders, Checkboxes, Dropdowns, Date/TimePickers, Dataframes, Plots, Code Editors, ImageEditor, plus Phase 7 utilities (Number, Label, JSON, Timer, File, DownloadButton) |
 | **Grid & Containers** | `cargo run -p grio --example grid` | Responsive Grids, Rows, Columns, Panels, and Accordions |
 | **Theming & Tabs** | `cargo run -p grio --example theme_and_tabs` | Multi-tab workflows, light/dark themes, brand accent customization |
 
@@ -139,6 +139,12 @@ d:\Projet\UI
 | `ImageEditor` | `imageeditor` | In/Out | Full canvas editor (draw, mask, crop, filters) | `.brush()`, `.crop()`, `.filters()`, `.layers()` |
 | `Code` | `code` | In/Out | Syntax-highlighted code editor | `.language()`, `.lines()`, `.theme()`, `.interactive()` |
 | `Explorer` | `explorer` | Input | Server-side directory and file browser | `.root()`, `.pattern()` |
+| `Number` | `number` | Input | Numeric field with min/max/step & ± stepper | `.label()`, `.value()`, `.min()`, `.max()`, `.step()`, `.unit()` |
+| `File` | `file` | Input | Multi-file upload (click / drag & drop, progress) | `.label()`, `.multiple()`, `.types()`, `.max_size()` |
+| `Json` | `json` | In/Out | Live-validated JSON editor / viewer | `.label()`, `.value()`, `.interactive()`, `.output()` |
+| `Label` | `label` | Output | Gradio-style value badge with semantic color | `.label()`, `.value()`, `.variant()`, `.size()` |
+| `Timer` | `timer` | Output | Periodic clock emitting `change` each tick | `.label()`, `.interval()`, `.running()` |
+| `DownloadButton` | `download` | Output | Server-triggered file download | `.label()`, `.filename()`, `.value()` |
 
 ### Containers & Layouts
 

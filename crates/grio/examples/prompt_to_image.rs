@@ -1066,6 +1066,7 @@ fn base64_encode(bytes: &[u8]) -> String {
 }
 
 /// Synthesizes high-resolution raw 1024x1024 pixels reflecting the prompt theme
+#[allow(dead_code)] // kept as a portable GPU-free fallback for demo builds
 fn generate_cinematic_image(prompt: &str, seed: u64, width: u32, height: u32) -> image::RgbImage {
     let mut img = image::RgbImage::new(width, height);
     let p_lower = prompt.to_lowercase();

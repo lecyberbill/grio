@@ -1,8 +1,9 @@
-//! Phase 4 — Widgets avancés : Checkbox, Dropdown (multiple/saisie libre),
-//! Date/Time, Dataframe éditable, Plot (SVG), Gallery, liste triable par
-//! glissé-déposé, Code colorisé, File Explorer (côté serveur).
+//! Phase 4 — Rich widgets: Checkbox, Dropdown (multiple/free-text), Date/Time,
+//! editable Dataframe, SVG Plot, Gallery, drag-sort list, highlighted Code and
+//! a server-side File Explorer — plus Phase 7 utilities: Number, Label, JSON,
+//! Timer, File upload and DownloadButton.
 //!
-//! Lancement : `cargo run -p grio --example forms`
+//! Run: `cargo run -p grio --example forms`
 
 fn main() -> grio::Result<()> {
     use grio::*;
@@ -11,91 +12,120 @@ fn main() -> grio::Result<()> {
 
         .on_click("bar", |ctx| {
             ctx.set("chart", chart(1.0, "bar"));
-            ctx.alert(AlertLevel::Success, "graphique en barres affiché");
+            ctx.alert(AlertLevel::Success, "bar chart displayed");
             Ok(())
         })
         .on_click("line", |ctx| {
             ctx.set("chart", chart(0.0, "line"));
-            ctx.alert(AlertLevel::Info, "graphique en lignes affiché");
+            ctx.alert(AlertLevel::Info, "line chart displayed");
             Ok(())
         })
         .on_click("shots", |ctx| {
             let idx = ctx.event().and_then(|e| e.d.as_ref().and_then(|d| d.as_u64())).unwrap_or(0);
-            ctx.alert(AlertLevel::Info, format!("image n°{} sélectionnée", idx + 1));
+            ctx.alert(AlertLevel::Info, format!("image #{} selected", idx + 1));
             Ok(())
         })
         .on_change("ex", |ctx| {
             let path = ctx.event().and_then(|e| e.d.as_ref().and_then(|d| d.as_str()).map(String::from));
-            ctx.alert(AlertLevel::Info, format!("fichier sélectionné : {}", path.unwrap_or_default()));
+            ctx.alert(AlertLevel::Info, format!("file selected: {}", path.unwrap_or_default()));
             Ok(())
         })
         .on_change("photo", |ctx| {
             if let Ok(v) = ctx.get::<serde_json::Value>("photo") {
                 let n = v.get("layers").and_then(|l| l.as_array()).map(|a| a.len()).unwrap_or(0);
                 let mask = v.get("mask").and_then(|m| m.as_str()).unwrap_or("");
-                ctx.alert(AlertLevel::Info, format!("retouche : {} calque(s), masque {} octets — prêt pour de l'inpainting", n, mask.len()));
+                ctx.alert(AlertLevel::Info, format!("edit: {} layer(s), mask {} bytes — ready for inpainting", n, mask.len()));
             }
             Ok(())
         })
+        .on_change("clock", |ctx| {
+            let t = ctx.event().and_then(|e| e.d.as_ref().and_then(|d| d.as_f64())).unwrap_or(0.0);
+            ctx.set("uptime", format!("{:.1} s", t));
+            Ok(())
+        })
+        .on_click("gencsv", |ctx| {
+            let n = ctx.get::<f64>("numcpu").unwrap_or(3.0) as usize;
+            let mut csv = String::from("color,n\n");
+            for i in 0..n {
+                csv.push_str(&format!("color_{i},{}\n", (i * 37) % 256));
+            }
+            use base64::Engine as _;
+            let b64 = base64::engine::general_purpose::STANDARD.encode(csv.as_bytes());
+            ctx.set("dl", serde_json::json!({ "b64": b64, "mime": "text/csv" }));
+            ctx.alert(AlertLevel::Success, format!("CSV generated ({} rows) — ready to download", n));
+            Ok(())
+        })
         .on_submit(|ctx| {
-            let mut s = String::from("=== Résumé des entrées ===\n");
-            if let Ok(b) = ctx.get::<bool>("deal") { s.push_str(&format!("✓ accord : {b}\n")); }
-            if let Ok(m) = ctx.get::<String>("model") { s.push_str(&format!("modèle : {m}\n")); }
-            if let Ok(tags) = ctx.get::<Vec<String>>("tags") { s.push_str(&format!("tags : {}\n", tags.join(", "))); }
-            if let Ok(d) = ctx.get::<String>("due") { s.push_str(&format!("échéance : {d}\n")); }
-            if let Ok(t) = ctx.get::<String>("alarm") { s.push_str(&format!("alarme : {t}\n")); }
+            let mut s = String::from("=== Input summary ===\n");
+            if let Ok(b) = ctx.get::<bool>("deal") { s.push_str(&format!("✓ agreement: {b}\n")); }
+            if let Ok(m) = ctx.get::<String>("model") { s.push_str(&format!("model: {m}\n")); }
+            if let Ok(tags) = ctx.get::<Vec<String>>("tags") { s.push_str(&format!("tags: {}\n", tags.join(", "))); }
+            if let Ok(d) = ctx.get::<String>("due") { s.push_str(&format!("due date: {d}\n")); }
+            if let Ok(t) = ctx.get::<String>("alarm") { s.push_str(&format!("alarm: {t}\n")); }
             if let Ok(v) = ctx.get::<serde_json::Value>("df") {
                 let rows = v.get("data").and_then(|x| x.as_array()).map(|a| a.len()).unwrap_or(0);
-                s.push_str(&format!("tableau : {rows} ligne(s)\n"));
+                s.push_str(&format!("table: {rows} row(s)\n"));
             }
             if let Ok(o) = ctx.get::<Vec<String>>("prio") {
-                s.push_str(&format!("priorités : {}\n", o.join(" > ")));
+                s.push_str(&format!("priorities: {}\n", o.join(" > ")));
             }
             if let Ok(code) = ctx.get::<String>("editor") {
-                s.push_str(&format!("code édité : {} caractères\n", code.len()));
+                s.push_str(&format!("edited code: {} characters\n", code.len()));
             }
             if let Ok(g) = ctx.get::<Vec<String>>("shots") {
-                s.push_str(&format!("galerie : {} image(s)\n", g.len()));
+                s.push_str(&format!("gallery: {} image(s)\n", g.len()));
             }
             if let Ok(p) = ctx.get::<String>("ex") {
-                s.push_str(&format!("fichier explorateur : {p}\n"));
+                s.push_str(&format!("explorer file: {p}\n"));
+            }
+            if let Ok(n) = ctx.get::<f64>("numcpu") {
+                s.push_str(&format!("CSV rows: {n}\n"));
+            }
+            if let Ok(doc) = ctx.get::<serde_json::Value>("jsondoc") {
+                if !doc.is_null() {
+                    let model = doc.get("model").and_then(|x| x.as_str()).unwrap_or("?");
+                    s.push_str(&format!("JSON: model {} · {}\n", model, doc));
+                }
+            }
+            if let Ok(files) = ctx.get::<Vec<serde_json::Value>>("docs") {
+                s.push_str(&format!("attachments: {} file(s)\n", files.len()));
             }
             ctx.set("summary", s);
             Ok(())
         })
 
-        .subtitle("Dix widgets paramétrables, à l'image de Gradio — tout est configurable par builder et lisible depuis les handlers.")
+        .subtitle("Ten configurable widgets, in the spirit of Gradio — everything is builder-configurable and readable from the handlers.")
         .item(Markdown::new("intro").text(
-            "# Widgets\n\nChaque composant expose ses options via des méthodes builder, sa valeur dans le snapshot d'entrées, et des événements `change` / `click` / `submit` classiques.\n\n**Mise en page (modulaire)** : `WithLayout::new(brique).width/.height/.scale/.min_width` enveloppe n'importe quel composant ; les groupes `row/column/panel` acceptent les mêmes réglages via leur builder (`r.scale(2)`, `p.min_width(…)`…).",
+            "# Widgets\n\nEach component exposes its options through builder methods, its value in the input snapshot, and the classic `change` / `click` / `submit` events.\n\n**Modular layout**: `WithLayout::new(brick).width/.height/.scale/.min_width` wraps any component; `row/column/panel` groups accept the same settings through their builder (`r.scale(2)`, `p.min_width(…)`…).",
         ))
 
         .row(|r| {
             r.scale(1);
             r.min_width(360);
-            r.item(Checkbox::new("deal").label("J'accepte les conditions").value(true));
+            r.item(Checkbox::new("deal").label("I accept the terms").value(true));
             r.item(Dropdown::new("model")
-                .label("Modèle")
+                .label("Model")
                 .choices(&[("gpt-4o", "GPT-4o"), ("claude-3.5", "Claude 3.5"), ("mistral", "Mistral")])
                 .value("claude-3.5"));
             r.item(Dropdown::new("tags")
-                .label("Tags (multi, saisie libre)")
+                .label("Tags (multiple, free text)")
                 .choices_str(&["rust", "ui", "web"])
                 .multiple(true)
                 .value_list(&["rust", "web"])
                 .allow_custom(true));
         })
         .row(|r| {
-            r.item(DatePicker::new("due").label("Échéance").min("2026-01-01").max("2026-12-31").value("2026-08-19"));
-            r.item(TimePicker::new("alarm").label("Alarme").value("09:30"));
+            r.item(DatePicker::new("due").label("Due date").min("2026-01-01").max("2026-12-31").value("2026-08-19"));
+            r.item(TimePicker::new("alarm").label("Alarm").value("09:30"));
         })
 
         .item(WithLayout::new(Dataframe::new("df")
-            .label("Panier (éditable)")
-            .headers(&["Produit", "Quantité", "Prix"])
+            .label("Cart (editable)")
+            .headers(&["Product", "Quantity", "Price"])
             .data(&serde_json::json!([
-                ["Pommes", 3, 2.5],
-                ["Lait", 2, 1.1],
-                ["Pain", 1, 1.8],
+                ["Apples", 3, 2.5],
+                ["Milk", 2, 1.1],
+                ["Bread", 1, 1.8],
             ]))
             .interactive(true)
             .addable(true)
@@ -104,10 +134,10 @@ fn main() -> grio::Result<()> {
 
         .row(|r| {
             r.item(SortableList::new("prio")
-                .label("Priorités (glisser-déposer)")
-                .items(&[("p1", "Rapide"), ("p2", "Complet"), ("p3", "Tampon")]));
+                .label("Priorities (drag & drop)")
+                .items(&[("p1", "Fast"), ("p2", "Complete"), ("p3", "Buffer")]));
             r.item(WithLayout::new(Code::new("editor")
-                .label("Éditeur Rust")
+                .label("Rust editor")
                 .language("rust")
                 .value("fn main() {\n    let msg = \"hello grio\";\n    println!(\"{msg}\");\n}\n")
                 .interactive(true)
@@ -116,59 +146,80 @@ fn main() -> grio::Result<()> {
         })
 
         .row(|r| {
-            r.item(WithLayout::new(Gallery::new("shots").label("Galerie (clic = index)").columns(3).interactive(true)).width(340));
+            r.item(WithLayout::new(Gallery::new("shots").label("Gallery (click = index)").columns(3).interactive(true)).width(340));
             r.item(WithLayout::new(Plot::new("chart")
-                .label("Graphique SVG")
+                .label("SVG chart")
                 .variant("line")
-                .title("Appels en classe")
-                .xlabel("séance")
-                .ylabel("étudiants"))
+                .title("Class attendance")
+                .xlabel("session")
+                .ylabel("students"))
                 .height(300));
         })
 
-        .panel("Fichiers (serveur)", |p| {
+        .panel("Server files", |p| {
             p.min_width(400);
             p.item(Explorer::new("ex")
-                .label("Explorer (racine du projet, *.rs)")
+                .label("Explorer (project root, *.rs)")
                 .root(".")
                 .pattern("*.rs"));
             p.item(Code::new("pretty")
-                .label("Code généré (lecture seule)")
+                .label("Generated code (read-only)")
                 .language("rust")
-                .value("// ex. la sortie d'un generateur de code\nlet out = compile(source);\n")
+                .value("// e.g. the output of a code generator\nlet out = compile(source);\n")
                 .output()
                 .lines(true));
         })
 
         .row(|r| {
-            r.item(WithLayout::new(Button::new("bar").label("Barres").secondary()).scale(1));
-            r.item(WithLayout::new(Button::new("line").label("Lignes").secondary()).scale(1));
+            r.item(WithLayout::new(Button::new("bar").label("Bars").secondary()).scale(1));
+            r.item(WithLayout::new(Button::new("line").label("Lines").secondary()).scale(1));
         })
 
-        .item(Output::new("summary").label("Résumé serveur"))
+        .item(Output::new("summary").label("Server summary"))
 
-        .panel("Retouche photo (calques → masque d'inpainting)", |p| {
+        .panel("Photo editing (layers → inpainting mask)", |p| {
             p.min_width(500);
             p.item(ImageEditor::new("photo")
-                .label("Pinceau, gomme, formes, rognage, rotation, filtres, undo/redo")
+                .label("Brush, eraser, shapes, crop, rotate, filters, undo/redo")
                 .layers(2)
                 .value(""));
             p.item(Markdown::new("photo_note").text(
-                "- **Pinceau/Gomme/Formes** dessinent sur le calque actif ; **zoom** (molette) et **Déplacer** (✋) naviguent.\n- **Crop** rogne, **↻ Rotation** pivote, **Filtres** modifie le fond.\n- À chaque geste, le serveur reçoit `{image, layers, mask}` — le **masque** (blanc sur noir) désigne les zones à repeindre (**inpainting**).",
+                "- **Brush/Eraser/Shapes** draw on the active layer; **zoom** (wheel) and **Pan** (✋) navigate.\n- **Crop** trims, **↻ Rotate** turns, **Filters** adjusts the background.\n- Each gesture sends `{image, layers, mask}` to the server — the **mask** (white on black) marks the areas to repaint (**inpainting**).",
             ));
         })
 
-        .panel("À propos", |p| {
+        .panel("Phase 7 — Files & Utilities", |p| {
+            p.min_width(460);
+            p.row(|r| {
+                r.item(Number::new("numcpu").label("Rows to generate").value(3.0).min(0.0).max(16.0).step(1.0));
+                r.item(Label::new("uptime").label("Session uptime").value("0.0 s").variant("success"));
+            });
+            p.item(Json::new("jsondoc")
+                .label("JSON parameters (live-validated editor)")
+                .value(serde_json::json!({ "model": "qwen", "warmup": 3, "top_k": 40, "tags": ["rust", "grio"] })));
+            p.item(Timer::new("clock").label("Timer (tick every 3 s)").interval(3.0));
+            p.item(File::new("docs")
+                .label("Attachments (images / PDF, max 4 MB)")
+                .types(&["image/*", "application/pdf"])
+                .max_size(4 * 1024 * 1024)
+                .multiple(true));
+            p.row(|r| {
+                r.item(WithLayout::new(Button::new("gencsv").label("Generate CSV").secondary()).scale(1));
+                r.item(DownloadButton::new("dl").label("Download CSV").filename("rapport.csv"));
+            });
+        })
+
+        .panel("About", |p| {
             p.item(Markdown::new("about").text(
-                "- **checkbox/dropdown/date/time/dataframe/list/code** envoient leur valeur dans le `change`, récupérée par `ctx.get`.\n- **plot** : SVG dessiné en JS pur, alimenté par `ctx.set` (où `chart(n)` est un petit générateur de sinusoïde).\n- **gallery** : les images uploadées sont des data URLs ; un clic émet l'index en `d`.\n- **explorer** : liste les fichiers de la machine du **serveur** via `/api/explore` (racine bornée + filtre `*.rs`).\n- **imageeditor** : retouche sur canvas (calques RGBA) → **masque** blanc/noir exploitable pour de l'inpainting côté serveur.",
+                "- **checkbox/dropdown/date/time/dataframe/list/code** send their value in the `change`, retrieved with `ctx.get`.\n- **plot**: SVG drawn in pure JS, fed by `ctx.set` (where `chart(n)` is a small sinusoid generator).\n- **gallery**: uploaded images are data URLs; a click emits the index in `d`.\n- **explorer**: lists files on the **server** machine via `/api/explore` (bounded root + `*.rs` filter).\n- **imageeditor**: canvas editing (RGBA layers) → white/black **mask** usable for inpainting server-side.",
             ));
         })
 
         .launch("0.0.0.0:7860")
 }
 
-/// Séries affichées dans le graphique (`k` décale la phase ; `variant` est
-/// `"line"`, `"bar"` ou `"scatter"`).
+/// Series displayed in the chart (`k` shifts the phase; `variant` is
+/// `"line"`, `"bar"` or `"scatter"`).
 fn chart(k: f64, variant: &str) -> serde_json::Value {
     use serde_json::json;
     let labels: Vec<String> = (1..=8).map(|i| format!("S{i}")).collect();
