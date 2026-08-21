@@ -96,66 +96,78 @@ fn main() -> grio::Result<()> {
 
         .subtitle("Ten configurable widgets, in the spirit of Gradio — everything is builder-configurable and readable from the handlers.")
         .item(Markdown::new("intro").text(
-            "# Widgets\n\nEach component exposes its options through builder methods, its value in the input snapshot, and the classic `change` / `click` / `submit` events.\n\n**Modular layout**: `WithLayout::new(brick).width/.height/.scale/.min_width` wraps any component; `row/column/panel` groups accept the same settings through their builder (`r.scale(2)`, `p.min_width(…)`…).",
+            "# Widgets\n\nEach component exposes its options through builder methods, its value in the input snapshot, and the classic `change` / `click` / `submit` events.\n\n**Modular layout**: `WithLayout::new(brick).width/.height/.scale/.min_width` wraps any component; `row` / `column` / `grid` / `panel` groups accept the same settings through their builder.",
         ))
 
-        .row(|r| {
-            r.scale(1);
-            r.min_width(360);
-            r.item(Checkbox::new("deal").label("I accept the terms").value(true));
-            r.item(Dropdown::new("model")
-                .label("Model")
-                .choices(&[("gpt-4o", "GPT-4o"), ("claude-3.5", "Claude 3.5"), ("mistral", "Mistral")])
-                .value("claude-3.5"));
-            r.item(Dropdown::new("tags")
+        // --- Inputs ---
+        .panel("Inputs", |p| {
+            p.grid(2, |g| {
+                g.item(Checkbox::new("deal").label("I accept the terms").value(true));
+                g.item(Dropdown::new("model")
+                    .label("Model")
+                    .choices(&[("gpt-4o", "GPT-4o"), ("claude-3.5", "Claude 3.5"), ("mistral", "Mistral")])
+                    .value("claude-3.5"));
+            });
+            p.item(Dropdown::new("tags")
                 .label("Tags (multiple, free text)")
                 .choices_str(&["rust", "ui", "web"])
                 .multiple(true)
                 .value_list(&["rust", "web"])
                 .allow_custom(true));
-        })
-        .row(|r| {
-            r.item(DatePicker::new("due").label("Due date").min("2026-01-01").max("2026-12-31").value("2026-08-19"));
-            r.item(TimePicker::new("alarm").label("Alarm").value("09:30"));
+            p.grid(2, |g| {
+                g.item(DatePicker::new("due").label("Due date").min("2026-01-01").max("2026-12-31").value("2026-08-19"));
+                g.item(TimePicker::new("alarm").label("Alarm").value("09:30"));
+            });
+            p.row(|r| {
+                r.item(WithLayout::new(Button::new("bar").label("Bars").secondary()).scale(1));
+                r.item(WithLayout::new(Button::new("line").label("Lines").secondary()).scale(1));
+            });
         })
 
-        .item(WithLayout::new(Dataframe::new("df")
-            .label("Cart (editable)")
-            .headers(&["Product", "Quantity", "Price"])
-            .data(&serde_json::json!([
-                ["Apples", 3, 2.5],
-                ["Milk", 2, 1.1],
-                ["Bread", 1, 1.8],
-            ]))
-            .interactive(true)
-            .addable(true)
-            .sortable(true))
-            .width(520))
-
-        .row(|r| {
-            r.item(SortableList::new("prio")
-                .label("Priorities (drag & drop)")
-                .items(&[("p1", "Fast"), ("p2", "Complete"), ("p3", "Buffer")]));
-            r.item(WithLayout::new(Code::new("editor")
-                .label("Rust editor")
-                .language("rust")
-                .value("fn main() {\n    let msg = \"hello grio\";\n    println!(\"{msg}\");\n}\n")
+        // --- Data & Code ---
+        .panel("Data & Code", |p| {
+            p.item(WithLayout::new(Dataframe::new("df")
+                .label("Cart (editable)")
+                .headers(&["Product", "Quantity", "Price"])
+                .data(&serde_json::json!([
+                    ["Apples", 3, 2.5],
+                    ["Milk", 2, 1.1],
+                    ["Bread", 1, 1.8],
+                ]))
                 .interactive(true)
-                .lines(true))
-                .height(220));
+                .addable(true)
+                .sortable(true))
+                .width(520));
+            p.row(|r| {
+                r.item(SortableList::new("prio")
+                    .label("Priorities (drag & drop)")
+                    .items(&[("p1", "Fast"), ("p2", "Complete"), ("p3", "Buffer")]));
+                r.item(WithLayout::new(Code::new("editor")
+                    .label("Rust editor")
+                    .language("rust")
+                    .value("fn main() {\n    let msg = \"hello grio\";\n    println!(\"{msg}\");\n}\n")
+                    .interactive(true)
+                    .lines(true))
+                    .height(220));
+            });
+            p.item(Output::new("summary").label("Server summary"));
         })
 
-        .row(|r| {
-            r.item(WithLayout::new(Gallery::new("shots").label("Gallery (click = index)").columns(3).interactive(true)).width(340));
-            r.item(WithLayout::new(Plot::new("chart")
-                .label("SVG chart")
-                .variant("line")
-                .title("Class attendance")
-                .xlabel("session")
-                .ylabel("students"))
-                .height(300));
+        // --- Media ---
+        .panel("Media", |p| {
+            p.row(|r| {
+                r.item(WithLayout::new(Gallery::new("shots").label("Gallery (click = index)").columns(3).interactive(true)).width(340));
+                r.item(WithLayout::new(Plot::new("chart")
+                    .label("SVG chart")
+                    .variant("line")
+                    .title("Class attendance")
+                    .xlabel("session")
+                    .ylabel("students"))
+                    .height(300));
+            });
         })
 
+        // --- Server files ---
         .panel("Server files", |p| {
             p.min_width(400);
             p.item(Explorer::new("ex")
@@ -170,13 +182,7 @@ fn main() -> grio::Result<()> {
                 .lines(true));
         })
 
-        .row(|r| {
-            r.item(WithLayout::new(Button::new("bar").label("Bars").secondary()).scale(1));
-            r.item(WithLayout::new(Button::new("line").label("Lines").secondary()).scale(1));
-        })
-
-        .item(Output::new("summary").label("Server summary"))
-
+        // --- Photo editing ---
         .panel("Photo editing (layers → inpainting mask)", |p| {
             p.min_width(500);
             p.item(ImageEditor::new("photo")
@@ -188,6 +194,7 @@ fn main() -> grio::Result<()> {
             ));
         })
 
+        // --- Phase 7: Files & Utilities ---
         .panel("Phase 7 — Files & Utilities", |p| {
             p.min_width(460);
             p.row(|r| {
