@@ -28,3 +28,4 @@ candle-nn = { version = "0.8" }
 tokenizers = { version = "0.21", default-features = false, features = ["fancy-regex"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 byteorder = "1.5"
+bytes = "1"
