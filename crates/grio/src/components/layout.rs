@@ -628,4 +628,3 @@ impl Component for DynamicContainer {
         children_refs(&self.children)
     }
 }
-
