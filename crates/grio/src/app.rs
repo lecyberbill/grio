@@ -73,6 +73,62 @@ impl Theme {
             ..Default::default()
         }
     }
+
+    /// **Preset Tokyo Night** : Thème sombre néon bleu/violet moderne.
+    pub fn tokyo_night() -> Self {
+        Self {
+            mode: ThemeMode::Dark,
+            primary: Some("#7aa2f7".into()),
+            radius: Some("10px".into()),
+            font: Some("Inter, system-ui, sans-serif".into()),
+            toggle: true,
+        }
+    }
+
+    /// **Preset Nord** : Thème sombre aux nuances polaires et reposantes.
+    pub fn nord() -> Self {
+        Self {
+            mode: ThemeMode::Dark,
+            primary: Some("#88c0d0".into()),
+            radius: Some("8px".into()),
+            font: Some("Inter, system-ui, sans-serif".into()),
+            toggle: true,
+        }
+    }
+
+    /// **Preset Cyberpunk** : Thème sombre à fort contraste avec accents rose/néon.
+    pub fn cyberpunk() -> Self {
+        Self {
+            mode: ThemeMode::Dark,
+            primary: Some("#f43f5e".into()),
+            radius: Some("4px".into()),
+            font: Some("JetBrains Mono, Fira Code, monospace".into()),
+            toggle: true,
+        }
+    }
+
+    /// **Preset Catppuccin Mocha** : Thème pastel sombre avec accent lavande.
+    pub fn catppuccin_mocha() -> Self {
+        Self {
+            mode: ThemeMode::Dark,
+            primary: Some("#cba6f7".into()),
+            radius: Some("12px".into()),
+            font: Some("Inter, system-ui, sans-serif".into()),
+            toggle: true,
+        }
+    }
+
+    /// **Preset Corporate** : Thème clair épuré pour applications d'entreprise.
+    pub fn corporate() -> Self {
+        Self {
+            mode: ThemeMode::Light,
+            primary: Some("#2563eb".into()),
+            radius: Some("6px".into()),
+            font: Some("Roboto, Inter, system-ui, sans-serif".into()),
+            toggle: true,
+        }
+    }
+
     /// Définit la couleur d'accentuation (ex: "#6366f1", "#10b981").
     pub fn primary(mut self, p: impl Into<String>) -> Self {
         self.primary = Some(p.into());
