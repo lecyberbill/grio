@@ -28,6 +28,7 @@
 //! [`README.md`](https://github.com/example/grio#readme).
 #![warn(missing_docs)]
 
+pub mod ai;
 pub mod app;
 pub mod components;
 pub mod context;
@@ -35,6 +36,8 @@ pub mod events;
 pub mod media;
 pub mod server;
 pub mod showcase;
+
+pub use ai::{Llm, LlmProvider};
 
 pub use app::{App, PageBuilder, PageDef, Theme, ThemeMode};
 pub use components::{
