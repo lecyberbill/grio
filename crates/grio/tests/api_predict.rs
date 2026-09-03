@@ -251,9 +251,39 @@ async fn test_showcase_boot_and_components() {
     );
 
     // 3. Validation de prédiction /api/predict sur le showcase
+    let payload = serde_json::json!({
+        "inputs": {
+            "sc_text": "My AI Test",
+            "sc_richtext": "### Title\n- Item",
+            "sc_dataeditor": { "columns": [], "data": [] },
+            "sc_nodegraph": { "nodes": [], "edges": [] },
+            "d_notes": "ok",
+            "num_items": 7,
+            "sc_slider": 0.85,
+            "sc_range": [15, 85],
+            "sc_radio_pills": "mamba",
+            "sc_radio_classic": "Q4_K_M",
+            "sc_dropdown": "qwen",
+            "sc_check": true,
+            "sc_date": "2026-09-03",
+            "sc_time": "12:00",
+            "sc_color": "#10b981",
+            "sc_editor": {
+                "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+                "mask": ""
+            },
+            "sc_recorder": "data:audio/webm;base64,GkX=",
+            "sc_df": [],
+            "sc_json": { "model": "qwen" },
+            "sc_sortable": ["p1", "p2", "p3", "p4"],
+            "sc_file": [],
+            "sc_explorer": ""
+        }
+    });
+
     let resp = http_post(
         &format!("http://127.0.0.1:{port}/api/predict"),
-        r##"{"inputs":{"sc_text":"My AI Test","num_items":7,"sc_slider":0.85,"sc_range":[15,85],"sc_radio_pills":"mamba","sc_radio_classic":"Q4_K_M","sc_dropdown":"qwen","sc_check":true,"sc_date":"2026-09-03","sc_time":"12:00","sc_color":"#10b981","sc_editor":{"image":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=","mask":""},"sc_recorder":"data:audio/webm;base64,GkX=","sc_df":[],"sc_json":{"model":"qwen"},"sc_sortable":["p1","p2","p3","p4"],"sc_file":[],"sc_explorer":""}}"##,
+        &payload.to_string(),
         None,
     )
     .await;
@@ -531,6 +561,197 @@ async fn test_map_openstreetmap_component() {
     assert!(html.contains("Louvre"), "Second marker label embedded");
     assert!(html.contains("1000"), "Circle radius in props");
 }
+
+#[tokio::test]
+async fn test_phase9_lot1_drawer_and_multipage() {
+    let mut app = App::new("Test Multi-Page & Drawer App").quiet();
+
+    // Page 1
+    app = app.page_with_icon("/", "Home View", "🏠", |p| {
+        p.item(Text::new("greeting").value("Hello World"));
+        p.item(Button::new("btn_drawer").label("Open Drawer"));
+    });
+
+    // Page 2
+    app = app.page_with_icon("/settings", "Settings View", "⚙️", |p| {
+        p.item(Slider::new("slider_val").min(0.0).max(10.0).value(5.0));
+    });
+
+    // Drawer
+    let drawer = Drawer::new("test_drawer")
+        .title("Side Drawer Title")
+        .placement("right")
+        .size(340)
+        .content(|d| {
+            d.item(Text::new("drawer_text").value("Inside Drawer"));
+        });
+    app = app.item(drawer);
+
+    let port = 17874;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // Test Root Route
+    let html_root = http_get(&format!("http://127.0.0.1:{port}/")).await;
+    assert!(html_root.contains("HTTP/1.1 200 OK"), "200 on /");
+    assert!(html_root.contains("mg-sidebar"), "Sidebar present");
+    assert!(html_root.contains("Home View"), "Page 1 in sidebar");
+    assert!(html_root.contains("Settings View"), "Page 2 in sidebar");
+    assert!(html_root.contains("mg-page-view"), "Page views in DOM");
+    assert!(html_root.contains("data-kind=\"drawer\""), "Drawer in DOM");
+    assert!(html_root.contains("Side Drawer Title"), "Drawer title in DOM");
+    assert!(html_root.contains("mg-drawer-right"), "Drawer right placement");
+
+    // Test Deep-linked Route /settings
+    let html_settings = http_get(&format!("http://127.0.0.1:{port}/settings")).await;
+    assert!(html_settings.contains("HTTP/1.1 200 OK"), "200 on /settings route");
+    assert!(html_settings.contains("slider_val"), "Settings slider rendered");
+}
+
+#[tokio::test]
+async fn test_phase9_lot2_richtext_dataeditor_and_slots() {
+    use serde_json::json;
+
+    let app = App::new("Test Phase 9 Lot 2")
+        .item(
+            RichText::new("ticket_md")
+                .label("Détails de l'incident")
+                .value("**Erreur critique :** base de données inaccessible.")
+                .lines(8),
+        )
+        .item(
+            DataEditor::new("grid")
+                .label("Catalogue Services")
+                .column("id", "Réf.", ColumnType::Text)
+                .column("active", "Actif", ColumnType::Boolean)
+                .column("sla", "SLA", ColumnType::Number)
+                .data(vec![
+                    vec![json!("SRV-1"), json!(true), json!(2)],
+                    vec![json!("SRV-2"), json!(false), json!(24)],
+                ]),
+        )
+        .item(
+            DynamicContainer::new("slot_zone")
+                .item(Output::new("slot_item").value("Slot initial")),
+        )
+        .item(Output::new("out"))
+        .on_submit(|ctx| {
+            let md: String = ctx.get("ticket_md").unwrap_or_default();
+            ctx.set("out", format!("verified: {}", md.contains("Erreur critique")));
+            Ok(())
+        });
+
+    let port = 17885;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // 1. Validation du rendu DOM
+    let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
+    assert!(html.contains(r#"data-kind="richtext""#), "RichText mounted in DOM");
+    assert!(html.contains(r#"data-kind="dataeditor""#), "DataEditor mounted in DOM");
+    assert!(html.contains(r#"data-kind="dynamic_container""#), "DynamicContainer mounted in DOM");
+    assert!(html.contains(r#"data-id="ticket_md""#), "RichText ticket_md id in DOM");
+    assert!(html.contains(r#"data-id="grid""#), "DataEditor grid id in DOM");
+    assert!(html.contains(r#"data-id="slot_zone""#), "DynamicContainer slot_zone in DOM");
+
+    // 2. Validation de l'API predict avec RichText et DataEditor
+    let req_body = json!({
+        "inputs": {
+            "ticket_md": "**Erreur critique :** serveur en panne",
+            "grid": {
+                "columns": [
+                    {"id": "id", "label": "Réf.", "type": "text"},
+                    {"id": "active", "label": "Actif", "type": "boolean"},
+                    {"id": "sla", "label": "SLA", "type": "number"}
+                ],
+                "data": [
+                    ["SRV-1", true, 2]
+                ]
+            }
+        }
+    });
+
+    let resp = http_post(
+        &format!("http://127.0.0.1:{port}/api/predict"),
+        &req_body.to_string(),
+        None,
+    )
+    .await;
+
+    assert!(
+        resp.contains("verified: true"),
+        "Predict output should contain verification: {resp}"
+    );
+}
+
+#[tokio::test]
+async fn test_phase9_lot3_pdf_and_nodegraph() {
+    let app = App::new("Test Phase 9 Lot 3")
+        .item(
+            Pdf::new("pdf_viewer")
+                .label("Document Analysis")
+                .src("https://example.com/test.pdf")
+                .page(2)
+                .highlight(2, 0.1, 0.2, 0.5, 0.1, "Extracted Block", "#10b981"),
+        )
+        .item(
+            NodeGraph::new("dag_pipeline")
+                .label("DAG Orchestrator")
+                .node(GraphNode::new("n1", "Input", "input").output("out", "Text"))
+                .node(GraphNode::new("n2", "LLM", "llm").input("in", "Text").output("out", "Text"))
+                .edge("n1", "out", "n2", "in")
+                .height(400),
+        )
+        .item(Output::new("out"))
+        .on_submit(|ctx| {
+            ctx.set("out", "lot3_verified");
+            Ok(())
+        });
+
+    let port = 17890;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // 1. Validation du rendu DOM
+    let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
+    assert!(html.contains(r#"data-kind="pdf""#), "Pdf mounted in DOM");
+    assert!(html.contains(r#"data-kind="nodegraph""#), "NodeGraph mounted in DOM");
+    assert!(html.contains(r#"data-id="pdf_viewer""#), "Pdf id in DOM");
+    assert!(html.contains(r#"data-id="dag_pipeline""#), "NodeGraph id in DOM");
+
+    // 2. Validation de l'API predict
+    let resp = http_post(
+        &format!("http://127.0.0.1:{port}/api/predict"),
+        r#"{"inputs":{"dag_pipeline":{"nodes":[],"edges":[]}}}"#,
+        None,
+    )
+    .await;
+
+    assert!(
+        resp.contains("lot3_verified"),
+        "Predict output should contain verification: {resp}"
+    );
+}
+
+
 
 async fn http_get(url: &str) -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};

@@ -89,12 +89,30 @@ impl App {
                 ctx.set("sc_color_echo", format!("Active color: {c}"));
                 Ok(())
             })
+            .on_click("btn_inject_slot", |ctx| {
+                let new_box = Output::new("slot_dyn_metric")
+                    .label("Composant injecté à chaud (WebSocket Slot)")
+                    .value("✅ Nœud dynamique monté en temps réel avec zéro rechargement de page.");
+                ctx.append_component("sc_dynamic_slot", new_box);
+                ctx.alert(AlertLevel::Success, "Composant injecté dans le DynamicContainer !");
+                Ok(())
+            })
+            .on_click("btn_clear_slot", |ctx| {
+                ctx.clear_container("sc_dynamic_slot");
+                ctx.alert(AlertLevel::Info, "DynamicContainer vidé.");
+                Ok(())
+            })
+            .on_click("btn_toggle_drawer", |ctx| {
+                ctx.set_prop("sc_drawer", "open", true);
+                ctx.alert(AlertLevel::Info, "Tiroir d'inspection ouvert.");
+                Ok(())
+            })
             .on_submit(showcase_submit)
             .flow(
                 &[
-                    "sc_text", "num_items", "sc_slider", "sc_range", "sc_radio_pills",
+                    "sc_text", "sc_richtext", "num_items", "sc_slider", "sc_range", "sc_radio_pills",
                     "sc_radio_classic", "sc_dropdown", "sc_check", "sc_date", "sc_time",
-                    "sc_color", "sc_recorder", "sc_df", "sc_json", "sc_sortable",
+                    "sc_color", "sc_recorder", "sc_df", "sc_dataeditor", "sc_json", "sc_sortable",
                 ],
                 &["sc_summary"],
             )
@@ -103,11 +121,16 @@ impl App {
             .tabs(|t| {
                 t
                 // --- Tab 1 : Forms & Controls ---
-                .tab("🎛️ Forms & Controls", |b| {
+                .tab("🎛️ Forms & Editing", |b| {
                     b.row(|r| {
                         r.item(Text::new("sc_text").label("Simple Text Input").value("My AI Model"));
                         r.item(Number::new("num_items").label("Items Count (Stepper)").value(5.0).min(1.0).max(20.0).step(1.0));
                     });
+                    b.item(RichText::new("sc_richtext")
+                        .label("Markdown Micro-Editor (RichText / Toolbar)")
+                        .placeholder("Rédigez votre note en Markdown...")
+                        .value("### Déploiement Modèle IA\n- **Statut :** Prêt pour la production\n- **Inférence :** `vLLM` activé\n- **Sécurité :** Clé API requise")
+                        .lines(5));
                     b.row(|r| {
                         r.item(Slider::new("sc_slider").label("Temperature (Slider)").min(0.0).max(1.0).step(0.05).value(0.7));
                         r.item(Label::new("sc_slider_echo").label("Slider Echo").value("0.70").variant("success"));
@@ -151,8 +174,8 @@ impl App {
                         ]));
                 })
 
-                // --- Tab 2 : Media & Vision ---
-                .tab("🖼️ Media & Vision", |b| {
+                // --- Tab 2 : Media, Vision & Documents ---
+                .tab("🖼️ Media & Documents", |b| {
                     b.row(|r| {
                         r.item(Image::new("sc_img").label("Image (upload / preview)").output().value("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500"));
                         r.item(Gallery::new("sc_gallery").label("Image Gallery").columns(3).output());
@@ -162,6 +185,11 @@ impl App {
                         .image("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500")
                         .box_norm(0.12, 0.28, 0.72, 0.72, "person", Some(0.96), "#6366f1")
                         .box_norm(0.65, 0.35, 0.95, 0.65, "clothing", Some(0.88), "#10b981"));
+                    b.item(Pdf::new("sc_pdf")
+                        .label("Interactive PDF Document Viewer (with RAG/OCR Highlights)")
+                        .src("https://raw.githubusercontent.com/mozilla/pdf.js/master/examples/learning/helloworld.pdf")
+                        .page(1)
+                        .highlight(1, 0.15, 0.25, 0.7, 0.1, "Extracted Title", "#6366f1"));
                     b.item(ImageComparison::new("sc_comp")
                         .label("Before / After Comparison (ImageComparison)")
                         .before("https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=300", "Low Resolution (Original)")
@@ -179,8 +207,28 @@ impl App {
                     b.item(Model3D::new("sc_m3d").label("3D Viewer (Model3D WebGL)"));
                 })
 
-                // --- Tab 3 : Data, Files & Code ---
-                .tab("📊 Data, Files & Code", |b| {
+                // --- Tab 3 : Data, Tables & Code ---
+                .tab("📊 Data & DataEditor", |b| {
+                    b.item(DataEditor::new("sc_dataeditor")
+                        .label("Interactive Data Grid & Editor (DataEditor: Typed columns, Checkboxes, Ctrl+V TSV/CSV)")
+                        .column("id", "ID", ColumnType::Text)
+                        .column("service", "Service IT", ColumnType::Text)
+                        .column("active", "Actif", ColumnType::Boolean)
+                        .column("sla_hours", "SLA (h)", ColumnType::Number)
+                        .column("priority", "Priorité", ColumnType::Dropdown(vec![
+                            "P1 - Critique".into(),
+                            "P2 - Haute".into(),
+                            "P3 - Normale".into(),
+                        ]))
+                        .data(vec![
+                            vec![serde_json::json!("SRV-01"), serde_json::json!("Réinitialisation MDP"), serde_json::json!(true), serde_json::json!(1), serde_json::json!("P1 - Critique")],
+                            vec![serde_json::json!("SRV-02"), serde_json::json!("Accès VPN Distant"), serde_json::json!(true), serde_json::json!(4), serde_json::json!("P2 - Haute")],
+                            vec![serde_json::json!("SRV-03"), serde_json::json!("Badge d'accès"), serde_json::json!(false), serde_json::json!(24), serde_json::json!("P3 - Normale")],
+                        ])
+                        .allow_add(true)
+                        .allow_delete(true)
+                        .allow_paste(true)
+                        .max_height(260));
                     b.item(HighlightedText::new("sc_ner")
                         .label("Named Entity Recognition (HighlightedText / NER)")
                         .segments(&[
@@ -259,18 +307,27 @@ impl App {
                                     </div>
                                     <span id="grio_bridge_badge" style="font-size: 0.8rem; color: #10b981; margin-left: auto;">🟢 window.grio active</span>
                                 </div>
-                                <script>
-                                    // Scoped and secure script with local 'element' and 'grio' injection
-                                    grio.on("sc_custom_html", function(patch) {
-                                        console.log("[showcase] Patch received from Rust backend:", patch);
-                                    });
-                                </script>
                             </div>
                         "#));
                 })
 
-                // --- Tab 4 : AI Chat & Observability ---
-                .tab("🤖 Chatbot & Observability", |b| {
+                // --- Tab 4 : Visual Workflows & DAG ---
+                .tab("🕸️ Visual Workflows (DAG)", |b| {
+                    b.item(NodeGraph::new("sc_nodegraph")
+                        .label("Multi-Model Pipeline & Workflow DAG Editor (ComfyUI-style)")
+                        .node(GraphNode::new("n_prompt", "User Prompt", "input").output("text", "Text").pos(40.0, 50.0).status("success"))
+                        .node(GraphNode::new("n_rag", "RAG Vector Search", "tool").input("query", "Text").output("context", "Documents").pos(260.0, 40.0).status("success"))
+                        .node(GraphNode::new("n_llm", "Mistral-Large-24B", "llm").input("prompt", "Text").input("context", "Documents").output("response", "Text").pos(480.0, 60.0).status("running"))
+                        .node(GraphNode::new("n_out", "Format & Deliver", "output").input("response", "Text").pos(720.0, 70.0).status("idle"))
+                        .edge("n_prompt", "text", "n_rag", "query")
+                        .edge("n_prompt", "text", "n_llm", "prompt")
+                        .edge("n_rag", "context", "n_llm", "context")
+                        .edge("n_llm", "response", "n_out", "response")
+                        .height(420));
+                })
+
+                // --- Tab 5 : AI Chat, Observability & Slots ---
+                .tab("🤖 Chatbot & Dynamic Slots", |b| {
                     b.row(|r| {
                         r.item(Metric::new("m_tps").label("Throughput").value("94.2").unit("tok/s").delta("+14.5%"));
                         r.item(Metric::new("m_ttft").label("TTFT").value("142").unit("ms").delta("-18ms").delta_color("pos"));
@@ -284,9 +341,18 @@ impl App {
                         ]));
                     b.row(|r| {
                         r.item(Button::new("btn_bot_stream").label("Simulate LLM Stream"));
+                        r.item(Button::new("btn_toggle_drawer").label("📂 Ouvrir Tiroir d'Inspection (Drawer)"));
                         r.item(WithLayout::new(Button::new("btn_gencsv").label("Generate CSV Export").secondary()).scale(1));
                         r.item(DownloadButton::new("dl_btn").label("Download CSV").filename("export_grio.csv"));
                     });
+                    b.row(|r| {
+                        r.item(Button::new("btn_inject_slot").label("➕ Injecter Composant (Slot)"));
+                        r.item(Button::new("btn_clear_slot").label("🗑 Vider Slot").secondary());
+                    });
+                    b.item(Panel::new("p_slot_panel")
+                        .label("Zone de Conteneur Dynamique (DynamicContainer)")
+                        .item(DynamicContainer::new("sc_dynamic_slot")
+                            .item(Output::new("sc_slot_init").label("Slot Initial").value("En attente d'injection dynamique..."))));
                     b.item(Plot::new("sc_plot")
                         .label("Native SVG Chart (zero dependencies)")
                         .data(&serde_json::json!({
@@ -299,7 +365,7 @@ impl App {
                         })));
                 })
 
-                // --- Tab 5 : System, Gauges & Documentation ---
+                // --- Tab 6 : System, Gauges & Documentation ---
                 .tab("⚙️ System, Gauges & Docs", |b| {
                     b.row(|r| {
                         r.item(Button::new("btn_toast_info").label("Toast Info"));
@@ -320,6 +386,18 @@ impl App {
                     b.item(Output::new("sc_summary").label("Form Snapshot (Submit Output)"));
                 })
             })
+
+            // Tiroir latéral d'inspection (Drawer)
+            .item(Drawer::new("sc_drawer")
+                .title("Inspection Système & Télémétrie")
+                .placement("right")
+                .size(420)
+                .open(false)
+                .content(|s| {
+                    s.item(Metric::new("d_cpu").label("CPU Usage").value("18.4").unit("%"));
+                    s.item(Metric::new("d_mem").label("RAM Occupée").value("1.2").unit("GB"));
+                    s.item(Text::new("d_notes").label("Notes d'audit").value("Audit validé"));
+                }))
     }
 }
 
@@ -327,6 +405,9 @@ fn showcase_submit(ctx: &mut Context) -> Result<()> {
     let mut out = String::from("=== SHOWCASE SUBMISSION RESULT ===\n\n");
     if let Ok(t) = ctx.get::<String>("sc_text") {
         out.push_str(&format!("• Text: {t}\n"));
+    }
+    if let Ok(rt) = ctx.get::<String>("sc_richtext") {
+        out.push_str(&format!("• RichText (Markdown length): {} chars\n", rt.len()));
     }
     if let Ok(n) = ctx.get::<f64>("num_items") {
         out.push_str(&format!("• Item count: {n}\n"));

@@ -2584,3 +2584,852 @@ body {
   background: rgba(0, 0, 0, 0.6);
   color: #ccc;
 }
+
+/* ===========================================================================
+   Phase 9 Lot 1: Drawer / MultiPage Layout & Responsive Engine
+   =========================================================================== */
+
+/* ---------- Drawer / Offcanvas ---------- */
+
+.mg-drawer-container {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  visibility: hidden;
+  transition: visibility 0.25s ease;
+}
+
+.mg-drawer-container.mg-drawer-open {
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.mg-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.mg-drawer-open .mg-drawer-backdrop {
+  opacity: 1;
+}
+
+.mg-drawer-panel {
+  position: absolute;
+  background: var(--mg-surface);
+  border: 1px solid var(--mg-border);
+  box-shadow: var(--mg-shadow-lg);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  z-index: 2;
+}
+
+/* Placements */
+.mg-drawer-right .mg-drawer-panel {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  border-right: none;
+  transform: translateX(100%);
+}
+
+.mg-drawer-left .mg-drawer-panel {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  height: 100%;
+  border-left: none;
+  transform: translateX(-100%);
+}
+
+.mg-drawer-bottom .mg-drawer-panel {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  border-bottom: none;
+  border-radius: var(--mg-radius) var(--mg-radius) 0 0;
+  transform: translateY(100%);
+}
+
+.mg-drawer-top .mg-drawer-panel {
+  left: 0;
+  right: 0;
+  top: 0;
+  width: 100%;
+  border-top: none;
+  border-radius: 0 0 var(--mg-radius) var(--mg-radius);
+  transform: translateY(-100%);
+}
+
+.mg-drawer-open .mg-drawer-panel {
+  transform: translate(0, 0);
+}
+
+.mg-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--mg-border);
+  background: var(--mg-surface-2);
+}
+
+.mg-drawer-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--mg-text);
+}
+
+.mg-drawer-close {
+  background: transparent;
+  border: none;
+  font-size: 1.25rem;
+  color: var(--mg-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--mg-radius-sm);
+  transition: all 0.15s ease;
+}
+
+.mg-drawer-close:hover {
+  color: var(--mg-text);
+  background: var(--mg-surface);
+}
+
+.mg-drawer-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---------- Multi-Page SPA Navigation & Sidebar ---------- */
+
+body.mg-has-sidebar {
+  display: flex;
+  min-height: 100vh;
+}
+
+.mg-app-container {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mg-sidebar {
+  width: 260px;
+  background: var(--mg-surface);
+  border-right: 1px solid var(--mg-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  padding: 20px 14px;
+  gap: 16px;
+  z-index: 100;
+  transition: transform 0.25s ease;
+}
+
+.mg-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 12px;
+  border-bottom: 1px solid var(--mg-border);
+}
+
+.mg-sidebar-brand {
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--mg-text);
+  letter-spacing: 0.02em;
+}
+
+.mg-sidebar-close {
+  display: none;
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--mg-muted);
+  cursor: pointer;
+}
+
+.mg-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mg-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--mg-radius-sm);
+  color: var(--mg-muted);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.92rem;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.mg-nav-item:hover {
+  color: var(--mg-text);
+  background: var(--mg-surface-2);
+}
+
+.mg-nav-item.active {
+  color: var(--mg-accent);
+  background: var(--mg-accent-soft);
+  border-color: rgba(99, 102, 241, 0.2);
+}
+
+.mg-nav-icon {
+  font-size: 1.15rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mg-sidebar-toggle {
+  display: none;
+  background: var(--mg-surface-2);
+  border: 1px solid var(--mg-border);
+  color: var(--mg-text);
+  padding: 6px 10px;
+  border-radius: var(--mg-radius-sm);
+  font-size: 1.1rem;
+  cursor: pointer;
+  margin-right: 12px;
+}
+
+.mg-page-view {
+  display: none;
+  width: 100%;
+  animation: mgFadeIn 0.2s ease-out;
+}
+
+.mg-page-view.active {
+  display: block;
+}
+
+/* ---------- Zero-Config Responsive Engine ---------- */
+
+/* Tablettes & Petits écrans (< 1024px) */
+@media (max-width: 1024px) {
+  .mg-sidebar-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mg-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100%;
+    transform: translateX(-100%);
+    box-shadow: var(--mg-shadow-lg);
+  }
+
+  .mg-sidebar.mg-sidebar-open {
+    transform: translateX(0);
+  }
+
+  .mg-sidebar-close {
+    display: block;
+  }
+
+  .mg-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 99;
+  }
+}
+
+/* Mobiles (< 640px) */
+@media (max-width: 640px) {
+  .mg-shell {
+    padding: 12px 14px;
+    gap: 16px;
+  }
+
+  .mg-header {
+    margin-bottom: 4px;
+  }
+
+  .mg-title {
+    font-size: 1.35rem;
+  }
+
+  /* Cibles tactiles 44px min pour mobile */
+  .mg-btn,
+  .mg-input,
+  .mg-nav-item,
+  .mg-theme-btn,
+  .mg-lang-btn,
+  .mg-footer-btn {
+    min-height: 44px;
+  }
+
+  /* Grilles fluides 1 colonne */
+  .mg-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Rangées qui s'empilent naturellement */
+  .mg-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  /* Onglets défilables horizontalement sans wrap agressif */
+  .mg-tabs-nav,
+  .mg-api-tabs {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .mg-tabs-nav::-webkit-scrollbar,
+  .mg-api-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mg-drawer-right .mg-drawer-panel,
+  .mg-drawer-left .mg-drawer-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* ==========================================================================
+   Phase 9 / Lot 2: RichText, DataEditor & Dynamic Slots
+   ========================================================================== */
+
+/* ---------- RichText Micro-Editor ---------- */
+.mg-richtext-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.mg-richtext-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  background: var(--mg-surface-2);
+  border: 1px solid var(--mg-border);
+  padding: 6px 8px;
+  border-radius: var(--mg-radius-sm);
+}
+
+.mg-richtext-btn {
+  background: var(--mg-surface);
+  border: 1px solid var(--mg-border);
+  color: var(--mg-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mg-richtext-btn:hover {
+  background: var(--mg-accent-soft);
+  border-color: var(--mg-accent);
+  color: var(--mg-accent);
+}
+
+.mg-richtext-btn.active {
+  background: var(--mg-accent);
+  color: #fff;
+  border-color: var(--mg-accent);
+}
+
+.mg-richtext-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--mg-border);
+  margin: 0 4px;
+}
+
+.mg-richtext-toggle-preview {
+  margin-left: auto;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+}
+
+.mg-richtext-textarea {
+  font-family: var(--mg-font);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.mg-richtext-preview {
+  background: var(--mg-surface);
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-radius-sm);
+  padding: 12px 16px;
+  overflow-y: auto;
+}
+
+/* ---------- DataEditor Interactive Grid ---------- */
+.mg-dataeditor-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.mg-dataeditor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mg-dataeditor-paste-hint {
+  font-size: 0.8rem;
+  color: var(--mg-text-muted);
+}
+
+.mg-dataeditor-container {
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-radius-sm);
+  background: var(--mg-surface);
+  overflow-x: auto;
+}
+
+.mg-dataeditor-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+}
+
+.mg-dataeditor-th {
+  background: var(--mg-surface-2);
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 0.84rem;
+  font-weight: 700;
+  border-bottom: 2px solid var(--mg-border);
+  user-select: none;
+}
+
+.mg-dataeditor-th.sortable {
+  cursor: pointer;
+}
+
+.mg-dataeditor-th.sortable:hover {
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+}
+
+.mg-dataeditor-sort-arrow {
+  color: var(--mg-accent);
+  font-size: 0.8em;
+  margin-left: 4px;
+}
+
+.mg-dataeditor-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--mg-border);
+  vertical-align: middle;
+}
+
+.mg-dataeditor-input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 0.86rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+
+.mg-dataeditor-input:hover,
+.mg-dataeditor-input:focus {
+  background: var(--mg-surface-2);
+  border-color: var(--mg-accent);
+}
+
+.mg-dataeditor-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--mg-accent);
+  margin: 0;
+  display: block;
+}
+
+.mg-dataeditor-select {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 0.84rem;
+}
+
+.mg-dataeditor-cell-ops {
+  text-align: center;
+  width: 48px;
+}
+
+/* ---------- DynamicContainer Slots ---------- */
+.mg-slot {
+  display: flex;
+  transition: all 0.2s ease-in-out;
+}
+
+.mg-slot-column {
+  flex-direction: column;
+}
+
+.mg-slot-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   Phase 9 / Lot 3: Pdf Viewer & NodeGraph DAG Workflow Editor
+   ========================================================================== */
+
+/* ---------- Pdf Document Viewer ---------- */
+.mg-pdf-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.mg-pdf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--mg-surface-2);
+  border: 1px solid var(--mg-border);
+  padding: 6px 12px;
+  border-radius: var(--mg-radius-sm);
+}
+
+.mg-pdf-page-info,
+.mg-pdf-zoom-badge {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--mg-text);
+  padding: 0 4px;
+}
+
+.mg-pdf-viewport {
+  position: relative;
+  width: 100%;
+  height: 520px;
+  background: var(--mg-surface);
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-radius-sm);
+  overflow: auto;
+}
+
+.mg-pdf-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+}
+
+.mg-pdf-doc-view {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.mg-pdf-paper {
+  width: 100%;
+  max-width: 680px;
+  background: #ffffff;
+  color: #1e293b;
+  border-radius: 6px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+  padding: 32px 36px;
+  font-family: var(--mg-font);
+  box-sizing: border-box;
+}
+
+.mg-pdf-paper-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+}
+
+.mg-pdf-paper-logo {
+  font-weight: 800;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  color: #4338ca;
+}
+
+.mg-pdf-paper-meta {
+  font-size: 0.72rem;
+  font-family: var(--mg-mono);
+  color: #64748b;
+}
+
+.mg-pdf-paper-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 16px 0;
+}
+
+.mg-pdf-paper-section {
+  margin-bottom: 20px;
+}
+
+.mg-pdf-paper-section h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #334155;
+  margin: 0 0 8px 0;
+}
+
+.mg-pdf-paper-section p {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: #475569;
+  margin: 0 0 8px 0;
+}
+
+.mg-pdf-callout {
+  background: #f1f5f9;
+  border-left: 4px solid #6366f1;
+  padding: 10px 14px;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.82rem;
+  color: #1e293b;
+  margin: 12px 0;
+}
+
+.mg-pdf-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+}
+
+.mg-pdf-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.mg-pdf-highlight {
+  position: absolute;
+  border: 2px solid var(--mg-accent);
+  background: rgba(99, 102, 241, 0.15);
+  border-radius: 4px;
+  pointer-events: auto;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mg-pdf-highlight:hover {
+  transform: scale(1.02);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+}
+
+.mg-pdf-highlight-badge {
+  position: absolute;
+  top: -22px;
+  left: 0;
+  background: var(--mg-accent);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ---------- NodeGraph DAG Workflow Editor ---------- */
+.mg-nodegraph-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.mg-nodegraph-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mg-nodegraph-canvas {
+  position: relative;
+  width: 100%;
+  background: var(--mg-bg);
+  background-image: radial-gradient(var(--mg-border) 1px, transparent 1px);
+  background-size: 20px 20px;
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-radius-sm);
+  overflow: hidden;
+  user-select: none;
+}
+
+.mg-nodegraph-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+.mg-nodegraph-nodes {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.mg-nodegraph-node {
+  position: absolute;
+  width: 200px;
+  background: var(--mg-surface);
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-radius-sm);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.15s ease;
+}
+
+.mg-nodegraph-node:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.mg-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--mg-surface-2);
+  border-bottom: 1px solid var(--mg-border);
+  border-radius: var(--mg-radius-sm) var(--mg-radius-sm) 0 0;
+  cursor: grab;
+}
+
+.mg-node-header:active {
+  cursor: grabbing;
+}
+
+.mg-node-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--mg-text);
+}
+
+.mg-node-status {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.mg-node-status.status-idle {
+  background: var(--mg-surface-3);
+  color: var(--mg-text-muted);
+}
+
+.mg-node-status.status-running {
+  background: #3b82f6;
+  color: #fff;
+  animation: mg-pulse 1.5s infinite;
+}
+
+.mg-node-status.status-success {
+  background: #10b981;
+  color: #fff;
+}
+
+.mg-node-status.status-error {
+  background: #ef4444;
+  color: #fff;
+}
+
+.mg-node-body {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+  gap: 12px;
+}
+
+.mg-node-inputs,
+.mg-node-outputs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mg-node-socket-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--mg-text-muted);
+}
+
+.mg-node-output-row {
+  flex-direction: row-reverse;
+}
+
+.mg-node-socket {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--mg-accent);
+  border: 2px solid var(--mg-surface);
+  cursor: crosshair;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.mg-node-socket:hover {
+  transform: scale(1.3);
+  background: #a5b4fc;
+}

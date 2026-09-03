@@ -14,6 +14,7 @@ base64 = "0.22"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
 candle-core = { version = "0.8" }
 candle-transformers = { version = "0.8" }
 candle-nn = { version = "0.8" }

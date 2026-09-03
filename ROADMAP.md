@@ -275,6 +275,46 @@ Universal responsive layout styling: `width`, `height`, `scale` (`flex-grow`), a
 
 ---
 
+## Phase 9 — Enterprise Layouts, Big Data & Advanced Modalities · [P0]
+
+> **Under Development / Planned.** Structured into coherent functional batches to build 
+> all necessary primitives before assembling the Flagship Enterprise Showcase.
+
+### 📦 Lot 1 — Layout, Navigation & Responsive Structure · ✅
+- **9.1 Sliding Drawers (`Drawer`)**: Slide-in panels (`left`, `right`, `bottom` bottom-sheet, `top`), blurred backdrop overlay, click/`Esc` dismissal, bi-directional `ctx.set` open/close binding.
+- **9.2 Declarative Multi-Page Routing (`MultiPage`)**: Declarative `app.page(route, title, builder)`, client-side SPA routing (`HTML5 History API`), auto-generated responsive sidebar & mobile drawer.
+- **9.3 Zero-Config Responsive Engine**: Standardized breakpoints (`< 640px`, `640–1024px`, `> 1024px`), 44px touch targets, horizontally scrollable tabs, and dense widget fullscreen toggles.
+- **Files**: `components.rs`, `app.rs`, `server.rs`, `app.js`, `styles.css`, `COMPONENTS.md`, `examples/multi_page_drawer.rs`, `tests/api_predict.rs`.
+
+### 📦 Lot 2 — Rich Editing, Dynamic Slots & Big Data Grid · ✅
+- **9.4 Markdown & Rich-Text Micro-Editor (`RichText`)**: Minimalist formatting toolbar (bold, italic, headings, lists, code, links), keyboard shortcuts (`Ctrl+B`, `Ctrl+I`, `Ctrl+K`), clean Markdown generation and preview mode.
+- **9.5 Interactive Data Editor (`DataEditor`)**: Typed columns (bool checkboxes, text, numbers, dropdowns), in-place cell editing, row/col addition & deletion, spreadsheet TSV/CSV copy-paste support.
+- **9.6 Dynamic Component Slots (`DynamicContainer` / Reactive Slots)**: Server-driven component injection/replacement at runtime (`ctx.append_component`, `ctx.replace_children`, `ctx.clear_container`).
+- **9.7 Universal Visibility (`visible: bool`)**: Universal dynamic show/hide property mutation with zero-flicker CSS flow toggling (`ctx.set_visible`).
+- **Files**: `components/forms.rs`, `components/data.rs`, `components/layout.rs`, `app.rs`, `context.rs`, `server.rs`, `assets/js/forms.js`, `assets/js/data.js`, `assets/js/core.js`, `styles.css`, `COMPONENTS.md`, `examples/rich_data_slots.rs`, `tests/api_predict.rs`.
+
+### 📦 Lot 3 — Documents & Visual Workflows (RAG & Node Pipelines) · ✅
+- **9.8 Document & PDF Viewer (`Pdf`)**: In-app document viewer, page navigation, zoom, and dynamic RAG/OCR citation highlights (`.highlight(...)`).
+- **9.9 Node-Based Workflow Editor (`NodeGraph` à la ComfyUI)**: Draggable nodes, typed input/output sockets, bezier curve connectors, node status indicators (`idle`, `running`, `success`, `error`), and asynchronous topology change events.
+- **Files**: `components/media.rs`, `components/special.rs`, `assets/js/media.js`, `assets/js/special.js`, `styles.css`, `COMPONENTS.md`, `showcase.rs`, `tests/api_predict.rs`.
+
+---
+
+## Flagship Showcase Application & Release · 🎯 [P0] · ✅
+
+### Enterprise IT Service Desk & AI Support Copilot (`examples/it_desk.rs`) · ✅
+A complete, production-grade enterprise demonstration app showcasing real-world multimodal AI and data workflows in pure Rust:
+- **💬 Conversational AI Copilot (`Chatbot`)**: Real-time token streaming diagnosing user IT issues, connected to local **LM Studio** (`http://localhost:1234/v1`), with seamless local fallback.
+- **📦 Service Catalog (`DataEditor`)**: Interactive service catalog with typed columns, active SLA rules, category filtering, and direct spreadsheet copy-paste.
+- **⚙️ Sliding Inspector & User Diagnostics (`Drawer`)**: Slide-in side panel for requester telemetry, network diagnostics, and emergency procedures.
+- **📝 Rich Incident Reporting (`RichText`, `File`)**: Formatted incident descriptions with Markdown toolbar and screenshot/log file uploads.
+- **📋 Reactive Ticket Management (`DynamicContainer`)**: Live hot-slot ticket injection upon submission with status badges and realtime updates.
+- **📊 User Observability & Incident Analytics (`Metric`, `Plot`, `Progress`)**: KPI header metrics + monthly quota progress + 6-month historical activity chart.
+- **📑 Knowledge Base Citations (`Pdf`)**: Integrated document viewer with highlighted RAG runbooks.
+- **Files**: `examples/it_desk.rs`, `Cargo.toml`, `assets/js/media.js`, `assets/styles.css`.
+
+---
+
 ## Roadmap Conventions
 
 1. One task = one checked box + an entry in `README.md`.

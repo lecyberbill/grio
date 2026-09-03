@@ -30,7 +30,23 @@ use crate::media;
 use crate::Result;
 
 const STYLES: &str = include_str!("assets/styles.css");
-const APP_JS: &str = include_str!("assets/app.js");
+const APP_JS: &str = concat!(
+    include_str!("assets/js/core.js"),
+    "\n\n",
+    include_str!("assets/js/forms.js"),
+    "\n\n",
+    include_str!("assets/js/data.js"),
+    "\n\n",
+    include_str!("assets/js/media.js"),
+    "\n\n",
+    include_str!("assets/js/canvas_editor.js"),
+    "\n\n",
+    include_str!("assets/js/special.js"),
+    "\n\n",
+    include_str!("assets/js/router.js"),
+    "\n\n",
+    include_str!("assets/js/i18n.js"),
+);
 
 type SessionMap = HashMap<String, Value>;
 type SessionStore = HashMap<String, Arc<Mutex<SessionMap>>>;
@@ -92,6 +108,13 @@ pub async fn serve(app: App, addr: String) -> Result<()> {
         .route("/api/openapi.json", get(openapi_spec))
         .route("/docs", get(docs_page))
         .route("/api/explore", get(explore));
+
+    // Register all declared multi-page routes for SPA deep-linking
+    for page in &server.app.pages {
+        if page.route != "/" {
+            router = router.route(&page.route, get(index));
+        }
+    }
 
     if server.app.allow_cors {
         router = router.layer(axum::middleware::from_fn(cors_middleware));
@@ -923,11 +946,6 @@ fn handle_stream(server: &AppServer, envelope: &Value) {
 }
 
 fn render_page(app: &App) -> String {
-    let mut body = String::new();
-    for c in app.root.children() {
-        render_component(c, &mut body);
-    }
-
     let title = esc_html(&app.title);
     let sub = if app.subtitle.is_empty() {
         String::new()
@@ -973,6 +991,60 @@ fn render_page(app: &App) -> String {
         String::new()
     };
 
+    let is_multipage = !app.pages.is_empty();
+    let multipage_cls = if is_multipage { " mg-has-sidebar" } else { "" };
+
+    let sidebar_toggle = if is_multipage {
+        r#"<button id="mg-sidebar-toggle" class="mg-sidebar-toggle" type="button" title="Toggle Navigation Menu" aria-label="Toggle Navigation">☰</button>"#
+    } else {
+        ""
+    };
+
+    let mut sidebar_html = String::new();
+    if is_multipage {
+        sidebar_html.push_str("<aside class=\"mg-sidebar\" id=\"mg-sidebar\"><div class=\"mg-sidebar-header\"><span class=\"mg-sidebar-brand\">📌 Pages</span><button id=\"mg-sidebar-close\" class=\"mg-sidebar-close\" type=\"button\">✕</button></div><nav class=\"mg-nav-list\">");
+        for (i, p) in app.pages.iter().enumerate() {
+            let active = if i == 0 { " active" } else { "" };
+            let icon_str = p.icon.as_deref().unwrap_or("📄");
+            sidebar_html.push_str(&format!(
+                r#"<a href="{}" class="mg-nav-item{active}" data-grio-route="{}" data-page-target="{}"><span class="mg-nav-icon">{}</span><span class="mg-nav-title">{}</span></a>"#,
+                esc_html(&p.route),
+                esc_html(&p.route),
+                esc_html(&p.id),
+                esc_html(icon_str),
+                esc_html(&p.title)
+            ));
+        }
+        sidebar_html.push_str("</nav></aside><div id=\"mg-sidebar-backdrop\" class=\"mg-sidebar-backdrop\" hidden></div>");
+    }
+
+    let mut body = String::new();
+    if is_multipage {
+        for (i, p) in app.pages.iter().enumerate() {
+            let active = if i == 0 { " active" } else { "" };
+            body.push_str(&format!(
+                r#"<section class="mg-page-view{active}" id="{}" data-route="{}">"#,
+                esc_html(&p.id),
+                esc_html(&p.route)
+            ));
+            if let Some(ch) = app.root.children().get(i) {
+                render_component(*ch, &mut body);
+            }
+            body.push_str("</section>");
+        }
+        // Render any global components added at root level (e.g. Drawers, floating modals)
+        let root_children = app.root.children();
+        if root_children.len() > app.pages.len() {
+            for ch in &root_children[app.pages.len()..] {
+                render_component(*ch, &mut body);
+            }
+        }
+    } else {
+        for c in app.root.children() {
+            render_component(c, &mut body);
+        }
+    }
+
     format!(
         r#"<!doctype html>
 <html lang="en"{theme_mode_attr}>
@@ -983,11 +1055,16 @@ fn render_page(app: &App) -> String {
 <link rel="stylesheet" href="/assets/styles.css">
 {theme_style}
 </head>
-<body>
+<body class="{multipage_cls}">
+{sidebar_html}
+<div class="mg-app-container">
 <main class="mg-shell"{shell_style}>
   <header class="mg-header">
     <div class="mg-header-row">
-      <h1 class="mg-title">{title}</h1>
+      <div class="mg-header-left">
+        {sidebar_toggle}
+        <h1 class="mg-title">{title}</h1>
+      </div>
       {toggle_html}
     </div>
     {sub}
@@ -1007,6 +1084,7 @@ fn render_page(app: &App) -> String {
     </div>
   </footer>
 </main>
+</div>
 
 <!-- Modal: Preferences & Language -->
 <div id="mg-prefs-modal" class="mg-modal-overlay" hidden>
@@ -1149,6 +1227,37 @@ fn render_component(c: &dyn Component, out: &mut String) {
             }
             out.push_str("</div></section>");
         }
+        "drawer" => {
+            let title = props_json["title"].as_str().unwrap_or("");
+            let placement = props_json["placement"].as_str().unwrap_or("right");
+            let size = props_json["size"].as_u64().unwrap_or(380);
+            let open = props_json["open"].as_bool().unwrap_or(false);
+            let backdrop = props_json["backdrop"].as_bool().unwrap_or(true);
+            let is_vertical = placement == "top" || placement == "bottom";
+            let size_style = if is_vertical {
+                format!("height: {size}px; max-height: 80vh;")
+            } else {
+                format!("width: {size}px; max-width: 90vw;")
+            };
+            let open_cls = if open { " mg-drawer-open" } else { "" };
+            let backdrop_html = if backdrop {
+                r#"<div class="mg-drawer-backdrop"></div>"#
+            } else {
+                ""
+            };
+
+            let mut inner = String::new();
+            for ch in c.children() {
+                render_component(ch, &mut inner);
+            }
+
+            out.push_str(&format!(
+                r#"<div class="mg-drawer-container mg-drawer-{placement}{open_cls}" data-kind="drawer" data-id="{}" data-role="{role}" data-props='{}'>{backdrop_html}<div class="mg-drawer-panel" style="{size_style}"><header class="mg-drawer-header"><h3 class="mg-drawer-title">{}</h3><button class="mg-drawer-close" type="button" aria-label="Close">✕</button></header><div class="mg-drawer-body">{inner}</div></div></div>"#,
+                attrs(c.id()),
+                props,
+                esc_html(title)
+            ));
+        }
         "tabitem" => {
             out.push_str(&format!(
                 r#"<div class="mg-tab-pane" data-kind="tabitem" data-id="{}" data-role="{role}" data-props='{}'>"#,
@@ -1219,6 +1328,19 @@ fn render_component(c: &dyn Component, out: &mut String) {
                 ));
             }
         }
+        "dynamic_container" => {
+            let dir = props_json["direction"].as_str().unwrap_or("column");
+            let cls = if dir == "row" { "mg-slot-row" } else { "mg-slot-column" };
+            out.push_str(&format!(
+                r#"<div class="mg-slot {cls}" data-kind="dynamic_container" data-id="{}" data-role="{role}" data-props='{}'>"#,
+                attrs(c.id()),
+                props
+            ));
+            for ch in c.children() {
+                render_component(ch, out);
+            }
+            out.push_str("</div>");
+        }
         kind => {
             out.push_str(&format!(
                 r#"<div class="mg-field mg-{kind}" data-kind="{kind}" data-id="{}" data-role="{role}" data-props='{}'></div>"#,
@@ -1227,6 +1349,12 @@ fn render_component(c: &dyn Component, out: &mut String) {
             ));
         }
     }
+}
+
+pub(crate) fn render_fragment(c: &dyn Component) -> String {
+    let mut out = String::new();
+    render_component(c, &mut out);
+    out
 }
 
 fn attrs(id: &str) -> String {

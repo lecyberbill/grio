@@ -140,6 +140,19 @@ pub struct HandlerDef {
     pub chain: Vec<Sibling>,
 }
 
+/// Définition d'une page dans une application multi-pages.
+#[derive(Clone, Debug)]
+pub struct PageDef {
+    /// Route d'accès (ex: `"/"`, `"/chat"`, `"/dashboard"`).
+    pub route: String,
+    /// Titre affiché dans la barre de navigation.
+    pub title: String,
+    /// Icône de navigation optionnelle (emoji ou texte).
+    pub icon: Option<String>,
+    /// Identifiant du conteneur de la page.
+    pub id: String,
+}
+
 /// Application web déclarative.
 ///
 /// Se construit par chaînage de méthodes ; `launch` démarre le serveur HTTP
@@ -151,6 +164,8 @@ pub struct App {
     pub subtitle: String,
     /// Racine de l'arbre de composants (colonne).
     pub root: Column,
+    /// Pages enregistrées (si mode multi-pages).
+    pub pages: Vec<PageDef>,
     /// Listeners enregistrés (soumission, changement, clic, applicatif).
     pub handlers: Vec<HandlerDef>,
     /// Mode live : chaque `change` redéclenche aussi les `submit`.
@@ -173,6 +188,124 @@ pub struct App {
     pub theme: Theme,
     /// Largeur maximale du conteneur de l'application (ex: 1200px).
     pub max_width: Option<u32>,
+}
+
+/// Collecteur d'éléments pour une page dans une application multi-pages.
+pub struct PageBuilder {
+    pub(crate) id: String,
+    pub(crate) icon: Option<String>,
+    pub(crate) children: Vec<Box<dyn Component>>,
+    pub(crate) gap: f64,
+}
+
+impl PageBuilder {
+    /// Crée un constructeur de page avec son identifiant.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            icon: None,
+            children: Vec::new(),
+            gap: 16.0,
+        }
+    }
+
+    /// Définit l'icône de la page (emoji ou texte court).
+    pub fn icon(&mut self, icon: impl Into<String>) -> &mut Self {
+        self.icon = Some(icon.into());
+        self
+    }
+
+    /// Définit l'espacement entre les composants en pixels.
+    pub fn gap(&mut self, g: f64) -> &mut Self {
+        self.gap = g;
+        self
+    }
+
+    /// Ajoute un composant à la page.
+    pub fn item(&mut self, c: impl IntoBox) -> &mut Self {
+        self.children.push(c.into_box());
+        self
+    }
+
+    /// Ajoute une ligne (Row) à la page.
+    pub fn row(&mut self, task: impl FnOnce(&mut RowBuilder)) -> &mut Self {
+        let mut b = RowBuilder::default();
+        task(&mut b);
+        let mut r = Row::new(format!("{}-row-{}", self.id, self.children.len())).gap(b.gap);
+        for c in b.children {
+            r.children.push(c);
+        }
+        if b.layout == Layout::default() {
+            self.children.push(Box::new(r));
+        } else {
+            self.children
+                .push(Box::new(WithLayout::new(r).set_layout(b.layout)));
+        }
+        self
+    }
+
+    /// Ajoute une colonne (Column) à la page.
+    pub fn column(&mut self, task: impl FnOnce(&mut RowBuilder)) -> &mut Self {
+        let mut b = RowBuilder::default();
+        task(&mut b);
+        let mut col = Column::new(format!("{}-col-{}", self.id, self.children.len())).gap(b.gap);
+        for c in b.children {
+            col.children.push(c);
+        }
+        if b.layout == Layout::default() {
+            self.children.push(Box::new(col));
+        } else {
+            self.children
+                .push(Box::new(WithLayout::new(col).set_layout(b.layout)));
+        }
+        self
+    }
+
+    /// Ajoute une grille (Grid) à la page.
+    pub fn grid(&mut self, columns: usize, task: impl FnOnce(&mut RowBuilder)) -> &mut Self {
+        let mut b = RowBuilder::default();
+        task(&mut b);
+        let mut g = Grid::new(format!("{}-grid-{}", self.id, self.children.len()))
+            .columns(columns)
+            .gap(b.gap);
+        for c in b.children {
+            g.children.push(c);
+        }
+        if b.layout == Layout::default() {
+            self.children.push(Box::new(g));
+        } else {
+            self.children
+                .push(Box::new(WithLayout::new(g).set_layout(b.layout)));
+        }
+        self
+    }
+
+    /// Ajoute un panneau (Panel) à la page.
+    pub fn panel(&mut self, label: impl Into<String>, task: impl FnOnce(&mut RowBuilder)) -> &mut Self {
+        let label = label.into();
+        let mut b = RowBuilder::default();
+        task(&mut b);
+        let mut p = Panel::new(format!("{}-panel-{}", self.id, label))
+            .label(label)
+            .gap(b.gap);
+        for c in b.children {
+            p.children.push(c);
+        }
+        if b.layout == Layout::default() {
+            self.children.push(Box::new(p));
+        } else {
+            self.children
+                .push(Box::new(WithLayout::new(p).set_layout(b.layout)));
+        }
+        self
+    }
+
+    /// Ajoute un conteneur d'onglets (Tabs) à la page.
+    pub fn tabs(&mut self, task: impl FnOnce(Tabs) -> Tabs) -> &mut Self {
+        let t = task(Tabs::new(format!("{}-tabs-{}", self.id, self.children.len())));
+        self.children.push(Box::new(t));
+        self
+    }
 }
 
 /// Collecteur d'éléments pour `App::row` / `column` / `panel` / `grid`.
@@ -304,6 +437,7 @@ impl App {
             title: title.into(),
             subtitle: String::new(),
             root: Column::new("root").gap(16.0),
+            pages: Vec::new(),
             handlers: Vec::new(),
             live: false,
             run_label: "Run".to_string(),
@@ -316,6 +450,48 @@ impl App {
             theme: Theme::default(),
             max_width: None,
         }
+    }
+
+    /// Déclare une page dans une application multi-pages.
+    pub fn page(
+        mut self,
+        route: impl Into<String>,
+        title: impl Into<String>,
+        task: impl FnOnce(&mut PageBuilder),
+    ) -> Self {
+        let route = route.into();
+        let title = title.into();
+        let mut b = PageBuilder::new(format!("page-{}", self.pages.len()));
+        task(&mut b);
+
+        let mut page_col = Column::new(&b.id).gap(b.gap);
+        for c in b.children {
+            page_col.push(c);
+        }
+
+        self.pages.push(PageDef {
+            route,
+            title,
+            icon: b.icon,
+            id: b.id,
+        });
+        self.root.push(Box::new(page_col));
+        self
+    }
+
+    /// Déclare une page avec une icône explicite.
+    pub fn page_with_icon(
+        self,
+        route: impl Into<String>,
+        title: impl Into<String>,
+        icon: impl Into<String>,
+        task: impl FnOnce(&mut PageBuilder),
+    ) -> Self {
+        let icon_str = icon.into();
+        self.page(route, title, |p| {
+            p.icon(icon_str);
+            task(p);
+        })
     }
 
     /// Définit la largeur maximale de l'application (ex: 1200 pour un container centré à 1200px).

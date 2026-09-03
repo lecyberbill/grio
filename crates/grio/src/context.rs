@@ -179,6 +179,65 @@ impl Context {
         self.push_update(id, patch);
     }
 
+    /// Contrôle de visibilité universel : affiche ou masque un composant à la volée.
+    ///
+    /// ```rust
+    /// # use grio::*;
+    /// # fn example(ctx: &mut Context) {
+    /// ctx.set_visible("error_panel", false);
+    /// # }
+    /// ```
+    pub fn set_visible(&mut self, id: impl Into<String>, visible: bool) {
+        self.set_prop(id, "visible", visible);
+    }
+
+    /// **Injection de slot dynamique** : injecte un nouveau composant à chaud
+    /// à l'intérieur d'un `DynamicContainer`.
+    ///
+    /// ```rust
+    /// # use grio::*;
+    /// # fn example(ctx: &mut Context) {
+    /// ctx.append_component("dynamic_slot", Text::new("new_msg").value("Nouveau message"));
+    /// # }
+    /// ```
+    pub fn append_component(&mut self, container_id: impl Into<String>, c: impl crate::components::Component + 'static) {
+        let container_id = container_id.into();
+        let html = crate::server::render_fragment(&c);
+        self.send(json!({
+            "t": "slot",
+            "container": container_id,
+            "mode": "append",
+            "html": html,
+        }));
+    }
+
+    /// **Remplacement de slot dynamique** : remplace la totalité des enfants
+    /// d'un `DynamicContainer` par une nouvelle liste de composants.
+    pub fn replace_children(&mut self, container_id: impl Into<String>, items: Vec<Box<dyn crate::components::Component>>) {
+        let container_id = container_id.into();
+        let mut html = String::new();
+        for it in items {
+            html.push_str(&crate::server::render_fragment(it.as_ref()));
+        }
+        self.send(json!({
+            "t": "slot",
+            "container": container_id,
+            "mode": "replace",
+            "html": html,
+        }));
+    }
+
+    /// **Vidage de slot dynamique** : retire tous les enfants du conteneur.
+    pub fn clear_container(&mut self, container_id: impl Into<String>) {
+        let container_id = container_id.into();
+        self.send(json!({
+            "t": "slot",
+            "container": container_id,
+            "mode": "clear",
+            "html": "",
+        }));
+    }
+
     /// **Streaming** : ajoute un fragment à la valeur d'un composant
     /// (les fragments sont concaténés côté client). Poussé immédiatement,
     /// uniquement en temps réel — absent de la réponse finale.

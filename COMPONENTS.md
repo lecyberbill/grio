@@ -7,6 +7,8 @@
 ## Table of Contents
 
 - [Layout & Containers](#layout--containers)
+  - [Multi-Page Apps & Navigation](#multi-page-apps--navigation)
+  - [Drawer / Offcanvas (Horizontal & Vertical Drawers)](#drawer--offcanvas-horizontal--vertical-drawers)
   - [App::row / Row](#approw--row)
   - [App::column / Column](#appcolumn--column)
   - [App::grid / Grid](#appgrid--grid)
@@ -15,6 +17,7 @@
   - [Accordion](#accordion)
 - [Input Components](#input-components)
   - [Text](#text)
+  - [RichText (Markdown & Rich Text Micro-Editor)](#richtext-markdown--rich-text-micro-editor)
   - [Slider](#slider)
   - [Checkbox](#checkbox)
   - [Dropdown](#dropdown)
@@ -29,9 +32,10 @@
   - [Plot (SVG Charts)](#plot-svg-charts)
   - [Gallery](#gallery)
   - [Progress Bar](#progress-bar)
-- [Media Components (Vision & Audio)](#media-components-vision--audio)
+- [Media Components (Vision, Audio & Documents)](#media-components-vision-audio--documents)
   - [Image & Webcam](#image--webcam)
   - [ImageEditor (Inpainting Masks)](#imageeditor-inpainting-masks)
+  - [Pdf (Document Viewer & RAG Citations)](#pdf-document-viewer--rag-citations)
   - [Audio & Microphone](#audio--microphone)
   - [Video](#video)
 - [Buttons & Actions](#buttons--actions)
@@ -40,6 +44,75 @@
 ---
 
 ## Layout & Containers
+
+### Multi-Page Apps & Navigation
+Define multi-page applications with declarative routing, automatic responsive sidebar navigation, and deep-linking support via HTML5 History API.
+
+```rust
+let mut app = App::new("AI Platform");
+
+// Home Page / Dashboard
+app.page("/", "📊 Overview", |p| {
+    p.icon("chart-pie");
+    p.item(Metric::new("tps").label("Throughput").value("64 tok/s"));
+    p.item(Plot::new("benchmarks"));
+});
+
+// Chatbot Page
+app.page("/chat", "💬 LLM Assistant", |p| {
+    p.icon("chat-bubble");
+    p.item(Chatbot::new("bot"));
+});
+
+// Diffusion Studio Page
+app.page("/diffusion", "🎨 Image Studio", |p| {
+    p.icon("paint-brush");
+    p.item(ImageEditor::new("canvas"));
+});
+```
+
+- **Features**:
+  - Auto-generated collapsible navigation sidebar with responsive mobile drawer.
+  - Client-side routing with URL deep-linking (`/`, `/chat`, `/diffusion`) without full page reloads.
+  - Shared session state across pages.
+
+---
+
+### `Drawer` / Offcanvas (Horizontal & Vertical Sliding Drawers)
+Sliding container supporting 4 directional placements: horizontal (`"left"`, `"right"`) and vertical (`"bottom"` / bottom-sheet, `"top"`). Ideal for property inspectors, advanced settings panels, mobile bottom drawers, and live console logs.
+
+```rust
+// 1. Declarative Drawer Builder
+let drawer = Drawer::new("settings_drawer")
+    .title("⚙️ Advanced Parameters")
+    .placement("right") // "left" | "right" | "bottom" | "top"
+    .size(380)          // Width in px (or height if bottom/top)
+    .open(false)        // Closed by default
+    .backdrop(true)     // Dimmed overlay background, clickable to dismiss
+    .content(|d| {
+        d.item(Slider::new("temp").label("Temperature").min(0.0).max(1.0).value(0.7));
+        d.item(Slider::new("top_p").label("Top-P").min(0.0).max(1.0).value(0.9));
+        d.item(Checkbox::new("stream").label("Enable Token Streaming").value(true));
+    });
+
+app.item(drawer);
+
+// 2. Open / Close from event handlers
+app.on_click("open_settings_btn", |ctx| {
+    ctx.set("settings_drawer", true); // Opens the drawer
+    Ok(())
+});
+```
+
+- **Builder Methods**:
+  - `.placement("left" | "right" | "bottom" | "top")`: Sliding edge origin.
+  - `.size(u32)`: Drawer width (px) for horizontal placements or height (px) for vertical placements.
+  - `.open(bool)`: Initial open state.
+  - `.backdrop(bool)`: Displays a dimmed background backdrop (click or `Esc` closes drawer).
+- **Dynamic Control**:
+  - `ctx.set("settings_drawer", true / false)` opens or closes the drawer in real time.
+
+---
 
 ### `App::row` / `Row`
 Horizontal container laying out children side-by-side with wrapping and flex alignment.
@@ -160,6 +233,27 @@ Text::new("prompt")
 
 ---
 
+### `RichText` (Markdown & Rich Text Micro-Editor)
+Lightweight formatting text editor supporting Markdown/WYSIWYG styling: bold (`**B**`), italic (`*I*`), headings (`H`), bullet/numbered lists, inline/block code (`</>`), and hyperlinks. Perfect for incident descriptions, notes, and formatted prompts.
+
+```rust
+RichText::new("ticket_desc")
+    .label("Issue Description & Steps to Reproduce")
+    .placeholder("Describe the problem with formatting, steps, and error messages...")
+    .toolbar(&["bold", "italic", "heading", "list", "code", "link"])
+    .min_height(160)
+    .value("**Error:** Unable to connect to `vpn.corp.local`.\n\n*Steps:*\n1. Start client\n2. Enter credentials")
+```
+
+- **Builder Methods**:
+  - `.toolbar(&["bold", "italic", "heading", "list", "code", "link"])`: Select visible action tools.
+  - `.min_height(u32)`: Minimum editor height in pixels.
+  - `.placeholder(str)`: Hint text shown when empty.
+- **Keyboard Shortcuts**: `Ctrl+B` (Bold), `Ctrl+I` (Italic), `Ctrl+K` (Link).
+- **Data format**: Returns clean Markdown/plain-text `String` via `ctx.get::<String>("ticket_desc")?`.
+
+---
+
 ### `Slider`
 Numeric range slider.
 
@@ -260,6 +354,42 @@ Dataframe::new("dataset")
         vec!["2", "Extract keywords", "0.88"],
     ])
     .interactive(true)
+```
+
+---
+
+### `DataEditor` (Big Data, Typed Columns & Spreadsheet Editing)
+Advanced interactive spreadsheet grid with typed columns (checkboxes, numbers, text, URLs), clipboard TSV/CSV copy-paste, in-place cell editing with visual status badges, and dynamic row/column additions.
+
+```rust
+DataEditor::new("data_grid")
+    .label("Dataset Inspector & Annotator")
+    .column_bool("active", "Active")
+    .column_text("name", "Name").editable(true)
+    .column_number("age", "Age").min(0.0).max(120.0)
+    .column_text("homepage", "Homepage").as_link(true)
+    .allow_add_rows(true)
+    .allow_delete_rows(true)
+    .data(my_records)
+```
+
+- **Big Data & Polars/Arrow Support**: Optimized for streaming and virtual scrolling of large tabular datasets directly from Rust.
+
+---
+
+### `DynamicContainer` (Reactive Slots / Runtime Component Injection)
+Dynamic slot container whose children components can be added, replaced, or removed at runtime from server handlers without pre-declaring static graphs.
+
+```rust
+// Declared in layout
+app.dynamic_container("dynamic_filters_slot");
+
+// Mutated in server handler
+app.on_click("add_filter_btn", |ctx| {
+    let new_widget = Slider::new(format!("filter_{}", uuid)).label("Dynamic Threshold");
+    ctx.append_component("dynamic_filters_slot", new_widget);
+    Ok(())
+});
 ```
 
 ---
@@ -523,6 +653,29 @@ ImageEditor::new("editor")
     .layers(2) // Outputs { image, layers, mask } on change
 ```
 
+### `Pdf` (Document Viewer & RAG Citations)
+Interactive PDF document viewer and uploader supporting page navigation, zoom/pan controls, text selection, and dynamic bounding-box or span highlights for RAG citations and OCR inspections.
+
+```rust
+Pdf::new("contract_doc")
+    .label("Source Document (RAG Analysis)")
+    .value("https://example.com/document.pdf") // or Base64 data URL
+    .page(2)
+    .height(650)
+    // Add citation highlight on page 2: [norm_x, norm_y, norm_w, norm_h, hex_color]
+    .highlight(2, 0.12, 0.35, 0.76, 0.10, "#fbbf24")
+    .interactive(true)
+```
+
+- **Builder Methods**:
+  - `.page(usize)`: Set the initially displayed page (1-indexed).
+  - `.highlight(page, x, y, w, h, color)`: Adds a normalized bounding box highlight over cited text.
+  - `.height(u32)`: Viewport height in pixels.
+- **Dynamic Updates**:
+  - `ctx.set("contract_doc", json!({ "page": 4, "highlights": [...] }))`: Change page and jump to cited paragraph dynamically.
+
+---
+
 ### `AnnotatedImage` (Object Detection & Bounding Boxes)
 Displays an image with vector bounding boxes, class labels, and confidence tags (e.g. YOLO, SAM, RT-DETR).
 
@@ -730,6 +883,39 @@ Map::new("fleet_map")
   - `ctx.event().unwrap().d` contains `{ "lat": 48.85..., "lon": 2.35..., "marker_id": "..." }`.
 - **Dynamic Updates**:
   - Mutate map markers and position in real time using `ctx.set("fleet_map", json!({ "center": [48.85, 2.35], "markers": [...] }))`.
+
+### `NodeGraph` (ComfyUI / Node-RED Interactive Workflow Editor)
+Interactive node-based visual workflow editor (inspired by ComfyUI / Blender Nodes). Supports draggable nodes, input/output sockets, bezier spline connections, custom node parameters (sliders, dropdowns, inputs inside nodes), execution status indicators, and serialized graph export to Rust.
+
+```rust
+NodeGraph::new("pipeline_graph")
+    .label("AI Diffusion & Pipeline Workflow")
+    .height(600)
+    // Define a Node prototype or instance
+    .node("clip_loader", "CLIP Text Encode", |n| {
+        n.category("loaders");
+        n.input_socket("clip", "CLIP");
+        n.output_socket("conditioning", "CONDITIONING");
+        n.widget(Text::new("prompt").label("Prompt").value("A cinematic photo of a cyberpunk city"));
+    })
+    .node("sampler", "KSampler", |n| {
+        n.category("sampling");
+        n.input_socket("model", "MODEL");
+        n.input_socket("positive", "CONDITIONING");
+        n.input_socket("latent_image", "LATENT");
+        n.output_socket("latent", "LATENT");
+        n.widget(Slider::new("steps").label("Steps").min(1.0).max(100.0).value(25.0));
+        n.widget(Slider::new("cfg").label("CFG Scale").min(1.0).max(20.0).value(7.5));
+    })
+    // Pre-connect sockets
+    .connect("clip_loader", "conditioning", "sampler", "positive")
+    .interactive(true)
+```
+
+- **Graph Execution & Events**:
+  - `app.on_change("pipeline_graph", |ctx| { ... })`: Emits graph topology changes (nodes added, moved, connected, deleted).
+  - Handlers can read the entire DAG topology via `ctx.get::<NodeGraphTopology>("pipeline_graph")?` to execute pipelines asynchronously in Rust.
+  - Server can push node execution states (`ctx.set_node_status("pipeline_graph", "sampler", NodeState::Running)`).
 
 ---
 
