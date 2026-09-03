@@ -956,6 +956,60 @@ impl App {
             rt.block_on(async move { crate::server::serve(self, addr.into()).await })
         }
     }
+
+    /// **Mode Desktop Standalone** : Démarre le serveur et ouvre automatiquement
+    /// l'application dans une fenêtre native dédiée (Frameless App Window).
+    pub fn launch_desktop(self, addr: impl Into<String>) -> Result<()> {
+        let addr_str: String = addr.into();
+        let target_url = if addr_str.starts_with("0.0.0.0:") {
+            format!(
+                "http://localhost:{}",
+                addr_str.trim_start_matches("0.0.0.0:")
+            )
+        } else if !addr_str.starts_with("http://") && !addr_str.starts_with("https://") {
+            format!("http://{addr_str}")
+        } else {
+            addr_str.clone()
+        };
+
+        let url_to_open = target_url.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            open_native_window(&url_to_open);
+        });
+
+        self.launch(addr_str)
+    }
+}
+
+/// Ouvre l'URL dans une fenêtre d'application autonome dédiée.
+fn open_native_window(url: &str) {
+    #[cfg(target_os = "windows")]
+    {
+        // Tente d'ouvrir en mode fenêtre standalone Edge/Chrome sans barre d'adresse
+        let app_flag = format!("--app={url}");
+        if std::process::Command::new("msedge")
+            .arg(&app_flag)
+            .spawn()
+            .is_err()
+            && std::process::Command::new("cmd")
+                .args(["/C", "start", url])
+                .spawn()
+                .is_err()
+        {
+            eprintln!("[grio::desktop] Could not launch browser automatically for {url}");
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(url).spawn();
+    }
+
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+    }
 }
 
 /// Traite un événement client : distribue aux handlers, fait tourner le bus
