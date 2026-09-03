@@ -701,6 +701,38 @@ Html::new("my_custom_widget")
 
 ---
 
+### `Map` (Interactive Geographic Map & OpenStreetMap)
+Interactive geospatial map powered by OpenStreetMap tiles, supporting pan/zoom, custom SVG markers, radius circles, and click events with zero npm dependencies.
+
+```rust
+Map::new("fleet_map")
+    .label("AI Fleet Tracking & Node Locations")
+    .center(48.8566, 2.3522) // [latitude, longitude]
+    .zoom(12) // Initial zoom level (1 to 19)
+    // Add markers with custom popups and colors
+    .marker(48.8584, 2.2945, "Compute Node A (Eiffel Tower)", Some("#6366f1"))
+    .marker(48.8606, 2.3376, "Edge Node B (Louvre)", Some("#10b981"))
+    // Add geographical radius circles (in meters)
+    .circle(48.8566, 2.3522, 1500.0, Some("#f59e0b"))
+    .height(420)
+    .interactive(true)
+```
+
+- **Builder Methods**:
+  - `.center(lat: f64, lon: f64)` : Sets the initial geographic center coordinates.
+  - `.zoom(level: u8)` : Sets the initial zoom factor (`1` to `19`, default `12`).
+  - `.marker(lat, lon, label, color)` : Adds an interactive pin with a tooltip and hex color.
+  - `.marker_with_id(id, lat, lon, label, color)` : Adds a pin with an explicit ID for event identification.
+  - `.circle(lat, lon, radius_meters, color)` : Adds a radius circle.
+  - `.height(px: u32)` : Sets the viewport height in pixels.
+- **Event Handling**:
+  - Listen to clicks on the map or markers with `app.on_click("fleet_map", |ctx| { ... })`.
+  - `ctx.event().unwrap().d` contains `{ "lat": 48.85..., "lon": 2.35..., "marker_id": "..." }`.
+- **Dynamic Updates**:
+  - Mutate map markers and position in real time using `ctx.set("fleet_map", json!({ "center": [48.85, 2.35], "markers": [...] }))`.
+
+---
+
 ## Themes & Visual Customization
 
 `grio` features a fully integrated Dark/Light mode theme engine with interactive UI toggling, OS preference detection, and CSS customization.

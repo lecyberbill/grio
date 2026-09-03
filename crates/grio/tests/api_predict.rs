@@ -352,6 +352,41 @@ async fn test_html_custom_component_robustness() {
     assert!(resp.contains("true"), "API Predict response valid");
 }
 
+#[tokio::test]
+async fn test_map_openstreetmap_component() {
+    let app = App::new("Test Map OpenStreetMap")
+        .item(Map::new("geo_map")
+            .label("Fleet Map")
+            .center(48.8566, 2.3522)
+            .zoom(14)
+            .marker(48.8584, 2.2945, "Eiffel Tower", Some("#6366f1"))
+            .marker(48.8606, 2.3376, "Louvre", Some("#10b981"))
+            .circle(48.8566, 2.3522, 1000.0, Some("#f59e0b"))
+            .height(380))
+        .item(Output::new("out"))
+        .on_click("geo_map", |ctx| {
+            ctx.set("out", "map_clicked_ok");
+            Ok(())
+        });
+
+    let port = 17873;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
+    assert!(html.contains(r#"data-kind="map""#), "Map in DOM");
+    assert!(html.contains("Fleet Map"), "Map label in DOM");
+    assert!(html.contains("Eiffel Tower"), "Marker label embedded in props");
+    assert!(html.contains("Louvre"), "Second marker label embedded");
+    assert!(html.contains("1000"), "Circle radius in props");
+}
+
 async fn http_get(url: &str) -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpStream;

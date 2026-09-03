@@ -49,6 +49,14 @@ impl App {
                 ctx.alert(AlertLevel::Info, "Progress gauges updated!");
                 Ok(())
             })
+            .on_click("sc_map", |ctx| {
+                if let Some(ev) = ctx.event() {
+                    if let Some(ref d) = ev.d {
+                        ctx.alert(AlertLevel::Info, format!("Map clicked at coordinates: {d}"));
+                    }
+                }
+                Ok(())
+            })
             .on_click("sc_custom_html", |ctx| {
                 ctx.alert(AlertLevel::Success, "'click' action received from custom HTML component (data-grio-action)!");
                 Ok(())
@@ -220,6 +228,15 @@ impl App {
                         r.item(File::new("sc_file").label("Multi-File Upload (File)").types(&["image/*", "text/*"]).interactive(true));
                         r.item(Explorer::new("sc_explorer").label("Server Explorer (Explorer)").root(".").pattern("*.rs"));
                     });
+                    b.item(Map::new("sc_map")
+                        .label("Geospatial Fleet & Infrastructure Analytics (Map / OpenStreetMap)")
+                        .center(48.8566, 2.3522)
+                        .zoom(12)
+                        .marker(48.8584, 2.2945, "AI Compute Node A (Eiffel Tower)", Some("#6366f1"))
+                        .marker(48.8606, 2.3376, "Edge Cluster B (Louvre)", Some("#10b981"))
+                        .marker(48.8530, 2.3499, "Data Hub C (Notre-Dame)", Some("#ec4899"))
+                        .circle(48.8566, 2.3522, 1800.0, Some("#6366f1"))
+                        .height(360));
                     b.item(Html::new("sc_custom_html")
                         .label("Custom HTML / JS Component (Robust Events & window.grio Bridge)")
                         .value(r#"

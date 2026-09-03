@@ -267,6 +267,12 @@ Universal responsive layout styling: `width`, `height`, `scale` (`flex-grow`), a
 - **Files**: `app.js`, `components.rs`, `lib.rs`, `styles.css`, `showcase.rs`, `COMPONENTS.md`, `tests/api_predict.rs`.
 - **Accepted when**: `test_html_custom_component_robustness` validates delegation and the WebSocket event lifecycle.
 
+### 8.7 Batch 6: Geospatial OpenStreetMap (`Map`) · ✅
+- `Map`: Interactive OpenStreetMap tile renderer, panning/zooming, SVG pins with popups, and radius circles.
+- **Bi-directional event loop**: Clicking the map or pins emits geographic coordinates `{lat, lon, marker_id}` to Rust handlers; dynamic mutations via `ctx.set`.
+- **Files**: `components.rs`, `lib.rs`, `app.js`, `styles.css`, `showcase.rs`, `COMPONENTS.md`, `tests/api_predict.rs`.
+- **Accepted when**: `cargo check --all-targets` & `cargo test` pass; `test_map_openstreetmap_component` validates DOM rendering and parameters.
+
 ---
 
 ## Roadmap Conventions

@@ -3593,6 +3593,292 @@
     }
   });
 
+  register('map', {
+    mount(c) {
+      const p = c.props;
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-map-wrap';
+
+      const lab = document.createElement('div');
+      lab.className = 'mg-label';
+      lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      wrap.appendChild(lab);
+
+      const frame = document.createElement('div');
+      frame.className = 'mg-map-frame';
+      const mapHeight = p.height || 420;
+      frame.style.height = `${mapHeight}px`;
+
+      const tilesContainer = document.createElement('div');
+      tilesContainer.className = 'mg-map-tiles';
+      frame.appendChild(tilesContainer);
+
+      const svgLayer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svgLayer.setAttribute('class', 'mg-map-svg-layer');
+      frame.appendChild(svgLayer);
+
+      const markersContainer = document.createElement('div');
+      markersContainer.className = 'mg-map-markers';
+      frame.appendChild(markersContainer);
+
+      // Contrôles de zoom (+ / -)
+      const controls = document.createElement('div');
+      controls.className = 'mg-map-controls';
+      const zoomInBtn = document.createElement('button');
+      zoomInBtn.type = 'button'; zoomInBtn.className = 'mg-map-ctrl-btn'; zoomInBtn.textContent = '+'; zoomInBtn.title = 'Zoom in';
+      const zoomOutBtn = document.createElement('button');
+      zoomOutBtn.type = 'button'; zoomOutBtn.className = 'mg-map-ctrl-btn'; zoomOutBtn.textContent = '−'; zoomOutBtn.title = 'Zoom out';
+      controls.appendChild(zoomInBtn);
+      controls.appendChild(zoomOutBtn);
+      frame.appendChild(controls);
+
+      // Attribution OpenStreetMap obligatoire
+      const attribution = document.createElement('div');
+      attribution.className = 'mg-map-attribution';
+      attribution.innerHTML = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+      frame.appendChild(attribution);
+
+      wrap.appendChild(frame);
+      c.el.appendChild(wrap);
+
+      let centerLat = Array.isArray(p.center) && p.center.length > 0 ? Number(p.center[0]) : 48.8566;
+      let centerLon = Array.isArray(p.center) && p.center.length > 1 ? Number(p.center[1]) : 2.3522;
+      let zoom = typeof p.zoom === 'number' ? Math.max(1, Math.min(19, Math.round(p.zoom))) : 12;
+      let markers = Array.isArray(p.markers) ? p.markers : [];
+      let circles = Array.isArray(p.circles) ? p.circles : [];
+      let selectedCoord = { lat: centerLat, lon: centerLon };
+
+      // Formules de projection Web Mercator (EPSG:3857)
+      const lon2x = (lon, z) => ((lon + 180) / 360) * Math.pow(2, z) * 256;
+      const lat2y = (lat, z) => {
+        const rad = (lat * Math.PI) / 180;
+        return ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * Math.pow(2, z) * 256;
+      };
+      const x2lon = (x, z) => (x / (Math.pow(2, z) * 256)) * 360 - 180;
+      const y2lat = (y, z) => {
+        const n = Math.PI - (2 * Math.PI * y) / (Math.pow(2, z) * 256);
+        return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+      };
+
+      const render = () => {
+        const width = frame.clientWidth || 600;
+        const height = frame.clientHeight || mapHeight;
+        if (width <= 0 || height <= 0) return;
+
+        const centerX = lon2x(centerLon, zoom);
+        const centerY = lat2y(centerLat, zoom);
+
+        const leftX = centerX - width / 2;
+        const topY = centerY - height / 2;
+        const rightX = centerX + width / 2;
+        const bottomY = centerY + height / 2;
+
+        const startTileX = Math.floor(leftX / 256);
+        const endTileX = Math.floor(rightX / 256);
+        const startTileY = Math.floor(topY / 256);
+        const endTileY = Math.floor(bottomY / 256);
+
+        const maxTiles = Math.pow(2, zoom);
+
+        // 1. Rendu des tuiles OpenStreetMap
+        tilesContainer.innerHTML = '';
+        for (let tx = startTileX; tx <= endTileX; tx++) {
+          for (let ty = startTileY; ty <= endTileY; ty++) {
+            if (ty < 0 || ty >= maxTiles) continue;
+            const normalizedX = ((tx % maxTiles) + maxTiles) % maxTiles;
+            const tileImg = document.createElement('img');
+            tileImg.className = 'mg-map-tile';
+            tileImg.src = `https://tile.openstreetmap.org/${zoom}/${normalizedX}/${ty}.png`;
+            tileImg.loading = 'lazy';
+            tileImg.style.left = `${tx * 256 - leftX}px`;
+            tileImg.style.top = `${ty * 256 - topY}px`;
+            tilesContainer.appendChild(tileImg);
+          }
+        }
+
+        // 2. Rendu des cercles géographiques SVG
+        svgLayer.innerHTML = '';
+        svgLayer.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        circles.forEach((circ) => {
+          if (typeof circ.lat !== 'number' || typeof circ.lon !== 'number') return;
+          const cx = lon2x(circ.lon, zoom) - leftX;
+          const cy = lat2y(circ.lat, zoom) - topY;
+
+          // Conversion rayon mètres en pixels selon la latitude
+          const metersPerPixel = (156543.03392 * Math.cos((circ.lat * Math.PI) / 180)) / Math.pow(2, zoom);
+          const rPx = Math.max(2, (circ.radius || 1000) / metersPerPixel);
+
+          const circleElem = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          circleElem.setAttribute('cx', cx);
+          circleElem.setAttribute('cy', cy);
+          circleElem.setAttribute('r', rPx);
+          const col = circ.color || '#6366f1';
+          circleElem.setAttribute('stroke', col);
+          circleElem.setAttribute('stroke-width', '2');
+          circleElem.setAttribute('fill', col + '26');
+          svgLayer.appendChild(circleElem);
+        });
+
+        // 3. Rendu des marqueurs animés
+        markersContainer.innerHTML = '';
+        markers.forEach((m, idx) => {
+          if (typeof m.lat !== 'number' || typeof m.lon !== 'number') return;
+          const mx = lon2x(m.lon, zoom) - leftX;
+          const my = lat2y(m.lat, zoom) - topY;
+
+          const pin = document.createElement('div');
+          pin.className = 'mg-map-marker';
+          pin.style.left = `${mx}px`;
+          pin.style.top = `${my}px`;
+          const col = m.color || '#6366f1';
+
+          pin.innerHTML = `
+            <svg class="mg-map-pin" viewBox="0 0 24 36" width="28" height="36">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24c0-6.63-5.37-12-12-12z" fill="${col}"/>
+              <circle cx="12" cy="12" r="5" fill="#ffffff"/>
+            </svg>
+          `;
+
+          if (m.label) {
+            const popup = document.createElement('div');
+            popup.className = 'mg-map-popup';
+            popup.textContent = m.label;
+            pin.appendChild(popup);
+          }
+
+          pin.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            selectedCoord = { lat: m.lat, lon: m.lon, marker_id: m.id || `m_${idx}`, label: m.label || '' };
+            emit(c, 'change', selectedCoord);
+            emit(c, 'click', selectedCoord);
+          });
+
+          markersContainer.appendChild(pin);
+        });
+      };
+
+      // Navigation & Interactions (Pan / Drag / Zoom)
+      if (p.interactive !== false) {
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let startCenterLat = centerLat, startCenterLon = centerLon;
+
+        frame.addEventListener('mousedown', (e) => {
+          if (e.target.closest('.mg-map-controls') || e.target.closest('.mg-map-attribution')) return;
+          isDragging = true;
+          startX = e.clientX;
+          startY = e.clientY;
+          startCenterLat = centerLat;
+          startCenterLon = centerLon;
+          frame.style.cursor = 'grabbing';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+          if (!isDragging) return;
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          const origCenterX = lon2x(startCenterLon, zoom);
+          const origCenterY = lat2y(startCenterLat, zoom);
+          const newCenterX = origCenterX - dx;
+          const newCenterY = origCenterY - dy;
+          centerLon = x2lon(newCenterX, zoom);
+          centerLat = y2lat(newCenterY, zoom);
+          render();
+        });
+
+        window.addEventListener('mouseup', () => {
+          if (isDragging) {
+            isDragging = false;
+            frame.style.cursor = 'grab';
+          }
+        });
+
+        // Zoom molette centré
+        frame.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          const rect = frame.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+
+          const oldCenterX = lon2x(centerLon, zoom);
+          const oldCenterY = lat2y(centerLat, zoom);
+          const mouseWorldX = oldCenterX - frame.clientWidth / 2 + mouseX;
+          const mouseWorldY = oldCenterY - frame.clientHeight / 2 + mouseY;
+
+          const mouseLon = x2lon(mouseWorldX, zoom);
+          const mouseLat = y2lat(mouseWorldY, zoom);
+
+          if (e.deltaY < 0 && zoom < 19) {
+            zoom++;
+          } else if (e.deltaY > 0 && zoom > 1) {
+            zoom--;
+          } else {
+            return;
+          }
+
+          const newMouseWorldX = lon2x(mouseLon, zoom);
+          const newMouseWorldY = lat2y(mouseLat, zoom);
+          const newCenterX = newMouseWorldX + frame.clientWidth / 2 - mouseX;
+          const newCenterY = newMouseWorldY + frame.clientHeight / 2 - mouseY;
+
+          centerLon = x2lon(newCenterX, zoom);
+          centerLat = y2lat(newCenterY, zoom);
+          render();
+        }, { passive: false });
+
+        // Clic sur la carte pour émettre les coordonnées géographiques
+        frame.addEventListener('click', (e) => {
+          if (e.target.closest('.mg-map-controls') || e.target.closest('.mg-map-attribution') || e.target.closest('.mg-map-marker')) return;
+          const rect = frame.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          const clickY = e.clientY - rect.top;
+          const currentCenterX = lon2x(centerLon, zoom);
+          const currentCenterY = lat2y(centerLat, zoom);
+          const worldX = currentCenterX - frame.clientWidth / 2 + clickX;
+          const worldY = currentCenterY - frame.clientHeight / 2 + clickY;
+          const lat = y2lat(worldY, zoom);
+          const lon = x2lon(worldX, zoom);
+          selectedCoord = { lat: Math.round(lat * 100000) / 100000, lon: Math.round(lon * 100000) / 100000 };
+          emit(c, 'change', selectedCoord);
+          emit(c, 'click', selectedCoord);
+        });
+
+        zoomInBtn.addEventListener('click', () => { if (zoom < 19) { zoom++; render(); } });
+        zoomOutBtn.addEventListener('click', () => { if (zoom > 1) { zoom--; render(); } });
+      }
+
+      requestAnimationFrame(render);
+      window.addEventListener('resize', render);
+      if (window.ResizeObserver) {
+        const ro = new ResizeObserver(() => render());
+        ro.observe(frame);
+      }
+
+      c.getValue = () => selectedCoord;
+      c.apply = (patch) => {
+        if (Array.isArray(patch.center)) {
+          if (patch.center.length > 0) centerLat = Number(patch.center[0]);
+          if (patch.center.length > 1) centerLon = Number(patch.center[1]);
+        }
+        if (typeof patch.zoom === 'number') zoom = Math.max(1, Math.min(19, Math.round(patch.zoom)));
+        if (Array.isArray(patch.markers)) markers = patch.markers;
+        if (Array.isArray(patch.circles)) circles = patch.circles;
+        if (patch.value && typeof patch.value === 'object') {
+          if (Array.isArray(patch.value.center)) {
+            centerLat = Number(patch.value.center[0]);
+            centerLon = Number(patch.value.center[1]);
+          }
+          if (typeof patch.value.zoom === 'number') zoom = Math.max(1, Math.min(19, Math.round(patch.value.zoom)));
+          if (Array.isArray(patch.value.markers)) markers = patch.value.markers;
+          if (Array.isArray(patch.value.circles)) circles = patch.value.circles;
+        }
+        if (patch.label != null) lab.innerHTML = '<span>' + esc(String(patch.label)) + '</span>';
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+        render();
+      };
+    }
+  });
+
   /* ---------- boot ---------- */
 
   function initTheme() {

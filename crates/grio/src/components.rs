@@ -2524,3 +2524,150 @@ impl Component for Html {
         })
     }
 }
+
+/// **MapMarker**: Represents a geographical point on a [`Map`].
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct MapMarker {
+    /// Latitude (e.g. `48.8566`).
+    pub lat: f64,
+    /// Longitude (e.g. `2.3522`).
+    pub lon: f64,
+    /// Label or tooltip description displayed on hover/click.
+    pub label: Option<String>,
+    /// Marker pin hex color (default: `#6366f1`).
+    pub color: Option<String>,
+    /// Optional identifier for event routing.
+    pub id: Option<String>,
+}
+
+/// **MapCircle**: Represents a geographical radius circle on a [`Map`].
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct MapCircle {
+    /// Center latitude.
+    pub lat: f64,
+    /// Center longitude.
+    pub lon: f64,
+    /// Radius in meters.
+    pub radius: f64,
+    /// Stroke and fill color.
+    pub color: Option<String>,
+}
+
+/// **Map** (OpenStreetMap) component: Interactive geographic map with tile rendering,
+/// interactive pan/zoom, markers, radius circles, and click events. Zero external npm dependencies.
+#[derive(Clone, Debug)]
+pub struct Map {
+    id: String,
+    label: String,
+    center_lat: f64,
+    center_lon: f64,
+    zoom: u8,
+    markers: Vec<MapMarker>,
+    circles: Vec<MapCircle>,
+    height: u32,
+    interactive: bool,
+    out: bool,
+}
+
+impl Map {
+    /// Creates a new Map component with its identifier. Centered on [0.0, 0.0] by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: String::new(),
+            center_lat: 48.8566, // Paris by default
+            center_lon: 2.3522,
+            zoom: 12,
+            markers: Vec::new(),
+            circles: Vec::new(),
+            height: 420,
+            interactive: true,
+            out: true,
+        }
+    }
+
+    /// Label displayed above the map.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+
+    /// Sets the initial map center coordinates [latitude, longitude].
+    pub fn center(mut self, lat: f64, lon: f64) -> Self {
+        self.center_lat = lat;
+        self.center_lon = lon;
+        self
+    }
+
+    /// Sets the initial zoom level (1 to 19, default: 12).
+    pub fn zoom(mut self, z: u8) -> Self {
+        self.zoom = z.clamp(1, 19);
+        self
+    }
+
+    /// Adds a marker with coordinates, label, and optional accent color.
+    pub fn marker(mut self, lat: f64, lon: f64, label: impl Into<String>, color: Option<&str>) -> Self {
+        self.markers.push(MapMarker {
+            lat,
+            lon,
+            label: Some(label.into()),
+            color: color.map(|s| s.to_string()),
+            id: None,
+        });
+        self
+    }
+
+    /// Adds a marker with an explicit ID for event identification.
+    pub fn marker_with_id(mut self, id: impl Into<String>, lat: f64, lon: f64, label: impl Into<String>, color: Option<&str>) -> Self {
+        self.markers.push(MapMarker {
+            lat,
+            lon,
+            label: Some(label.into()),
+            color: color.map(|s| s.to_string()),
+            id: Some(id.into()),
+        });
+        self
+    }
+
+    /// Adds a radius circle (radius in meters).
+    pub fn circle(mut self, lat: f64, lon: f64, radius: f64, color: Option<&str>) -> Self {
+        self.circles.push(MapCircle {
+            lat,
+            lon,
+            radius,
+            color: color.map(|s| s.to_string()),
+        });
+        self
+    }
+
+    /// Sets the map display height in pixels (default: `420`).
+    pub fn height(mut self, px: u32) -> Self {
+        self.height = px;
+        self
+    }
+
+    /// Enables or disables map interactivity (panning, zooming, clicking).
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
+
+    /// Declares the component as **Input** (emits click coordinate snapshots).
+    pub fn input(mut self) -> Self { self.out = false; self }
+    /// Declares the component as **Output** (default, viewer).
+    pub fn output(mut self) -> Self { self.out = true; self }
+}
+
+impl Component for Map {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "map" }
+    fn role(&self) -> Role { if self.out { Role::Output } else { Role::Input } }
+    fn props(&self) -> Value {
+        json!({
+            "label": self.label,
+            "center": [self.center_lat, self.center_lon],
+            "zoom": self.zoom,
+            "markers": self.markers,
+            "circles": self.circles,
+            "height": self.height,
+            "interactive": self.interactive,
+        })
+    }
+}
