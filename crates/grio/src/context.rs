@@ -200,7 +200,11 @@ impl Context {
     /// ctx.append_component("dynamic_slot", Text::new("new_msg").value("Nouveau message"));
     /// # }
     /// ```
-    pub fn append_component(&mut self, container_id: impl Into<String>, c: impl crate::components::Component + 'static) {
+    pub fn append_component(
+        &mut self,
+        container_id: impl Into<String>,
+        c: impl crate::components::Component + 'static,
+    ) {
         let container_id = container_id.into();
         let html = crate::server::render_fragment(&c);
         self.send(json!({
@@ -213,7 +217,11 @@ impl Context {
 
     /// **Remplacement de slot dynamique** : remplace la totalité des enfants
     /// d'un `DynamicContainer` par une nouvelle liste de composants.
-    pub fn replace_children(&mut self, container_id: impl Into<String>, items: Vec<Box<dyn crate::components::Component>>) {
+    pub fn replace_children(
+        &mut self,
+        container_id: impl Into<String>,
+        items: Vec<Box<dyn crate::components::Component>>,
+    ) {
         let container_id = container_id.into();
         let mut html = String::new();
         for it in items {

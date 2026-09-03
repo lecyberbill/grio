@@ -777,7 +777,12 @@ impl DataEditor {
     }
 
     /// Ajoute une colonne typée via un builder fluide.
-    pub fn column(mut self, id: impl Into<String>, label: impl Into<String>, col_type: ColumnType) -> Self {
+    pub fn column(
+        mut self,
+        id: impl Into<String>,
+        label: impl Into<String>,
+        col_type: ColumnType,
+    ) -> Self {
         self.columns.push(ColumnDef::new(id, label, col_type));
         self
     }
@@ -856,4 +861,3 @@ impl Component for DataEditor {
         })
     }
 }
-

@@ -521,4 +521,3 @@
   else init();
 
   window.MG = { register, emit, byId, markdown, t, setLanguage, stream(id) { return { send(blob) { const c = byId[id]; if (c && blob) sendStream(c, blob); } }; } };
-})();

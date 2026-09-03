@@ -841,7 +841,11 @@ pub struct GraphNode {
 
 impl GraphNode {
     /// Crée un nouveau nœud avec son identifiant, son titre et sa catégorie.
-    pub fn new(id: impl Into<String>, title: impl Into<String>, category: impl Into<String>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        title: impl Into<String>,
+        category: impl Into<String>,
+    ) -> Self {
         Self {
             id: id.into(),
             title: title.into(),
@@ -1038,4 +1042,3 @@ impl Component for NodeGraph {
         })
     }
 }
-

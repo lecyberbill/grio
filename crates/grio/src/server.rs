@@ -31,6 +31,7 @@ use crate::Result;
 
 const STYLES: &str = include_str!("assets/styles.css");
 const APP_JS: &str = concat!(
+    "(function () {\n'use strict';\n\n",
     include_str!("assets/js/core.js"),
     "\n\n",
     include_str!("assets/js/forms.js"),
@@ -46,6 +47,7 @@ const APP_JS: &str = concat!(
     include_str!("assets/js/router.js"),
     "\n\n",
     include_str!("assets/js/i18n.js"),
+    "\n\n})();"
 );
 
 type SessionMap = HashMap<String, Value>;
@@ -1330,7 +1332,11 @@ fn render_component(c: &dyn Component, out: &mut String) {
         }
         "dynamic_container" => {
             let dir = props_json["direction"].as_str().unwrap_or("column");
-            let cls = if dir == "row" { "mg-slot-row" } else { "mg-slot-column" };
+            let cls = if dir == "row" {
+                "mg-slot-row"
+            } else {
+                "mg-slot-column"
+            };
             out.push_str(&format!(
                 r#"<div class="mg-slot {cls}" data-kind="dynamic_container" data-id="{}" data-role="{role}" data-props='{}'>"#,
                 attrs(c.id()),

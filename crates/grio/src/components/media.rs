@@ -855,11 +855,12 @@ impl Pdf {
 
     /// Facteur de zoom initial (ex. 1.0 pour 100%, 1.25 pour 125%).
     pub fn zoom(mut self, z: f64) -> Self {
-        self.zoom = z.max(0.2).min(4.0);
+        self.zoom = z.clamp(0.2, 4.0);
         self
     }
 
     /// Ajoute une zone de surlignage RAG/OCR sur une page donnée.
+    #[allow(clippy::too_many_arguments)]
     pub fn highlight(
         mut self,
         page: u32,
@@ -924,4 +925,3 @@ impl Component for Pdf {
         })
     }
 }
-

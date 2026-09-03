@@ -605,13 +605,25 @@ async fn test_phase9_lot1_drawer_and_multipage() {
     assert!(html_root.contains("Settings View"), "Page 2 in sidebar");
     assert!(html_root.contains("mg-page-view"), "Page views in DOM");
     assert!(html_root.contains("data-kind=\"drawer\""), "Drawer in DOM");
-    assert!(html_root.contains("Side Drawer Title"), "Drawer title in DOM");
-    assert!(html_root.contains("mg-drawer-right"), "Drawer right placement");
+    assert!(
+        html_root.contains("Side Drawer Title"),
+        "Drawer title in DOM"
+    );
+    assert!(
+        html_root.contains("mg-drawer-right"),
+        "Drawer right placement"
+    );
 
     // Test Deep-linked Route /settings
     let html_settings = http_get(&format!("http://127.0.0.1:{port}/settings")).await;
-    assert!(html_settings.contains("HTTP/1.1 200 OK"), "200 on /settings route");
-    assert!(html_settings.contains("slider_val"), "Settings slider rendered");
+    assert!(
+        html_settings.contains("HTTP/1.1 200 OK"),
+        "200 on /settings route"
+    );
+    assert!(
+        html_settings.contains("slider_val"),
+        "Settings slider rendered"
+    );
 }
 
 #[tokio::test]
@@ -637,13 +649,15 @@ async fn test_phase9_lot2_richtext_dataeditor_and_slots() {
                 ]),
         )
         .item(
-            DynamicContainer::new("slot_zone")
-                .item(Output::new("slot_item").value("Slot initial")),
+            DynamicContainer::new("slot_zone").item(Output::new("slot_item").value("Slot initial")),
         )
         .item(Output::new("out"))
         .on_submit(|ctx| {
             let md: String = ctx.get("ticket_md").unwrap_or_default();
-            ctx.set("out", format!("verified: {}", md.contains("Erreur critique")));
+            ctx.set(
+                "out",
+                format!("verified: {}", md.contains("Erreur critique")),
+            );
             Ok(())
         });
 
@@ -659,12 +673,30 @@ async fn test_phase9_lot2_richtext_dataeditor_and_slots() {
 
     // 1. Validation du rendu DOM
     let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
-    assert!(html.contains(r#"data-kind="richtext""#), "RichText mounted in DOM");
-    assert!(html.contains(r#"data-kind="dataeditor""#), "DataEditor mounted in DOM");
-    assert!(html.contains(r#"data-kind="dynamic_container""#), "DynamicContainer mounted in DOM");
-    assert!(html.contains(r#"data-id="ticket_md""#), "RichText ticket_md id in DOM");
-    assert!(html.contains(r#"data-id="grid""#), "DataEditor grid id in DOM");
-    assert!(html.contains(r#"data-id="slot_zone""#), "DynamicContainer slot_zone in DOM");
+    assert!(
+        html.contains(r#"data-kind="richtext""#),
+        "RichText mounted in DOM"
+    );
+    assert!(
+        html.contains(r#"data-kind="dataeditor""#),
+        "DataEditor mounted in DOM"
+    );
+    assert!(
+        html.contains(r#"data-kind="dynamic_container""#),
+        "DynamicContainer mounted in DOM"
+    );
+    assert!(
+        html.contains(r#"data-id="ticket_md""#),
+        "RichText ticket_md id in DOM"
+    );
+    assert!(
+        html.contains(r#"data-id="grid""#),
+        "DataEditor grid id in DOM"
+    );
+    assert!(
+        html.contains(r#"data-id="slot_zone""#),
+        "DynamicContainer slot_zone in DOM"
+    );
 
     // 2. Validation de l'API predict avec RichText et DataEditor
     let req_body = json!({
@@ -710,7 +742,11 @@ async fn test_phase9_lot3_pdf_and_nodegraph() {
             NodeGraph::new("dag_pipeline")
                 .label("DAG Orchestrator")
                 .node(GraphNode::new("n1", "Input", "input").output("out", "Text"))
-                .node(GraphNode::new("n2", "LLM", "llm").input("in", "Text").output("out", "Text"))
+                .node(
+                    GraphNode::new("n2", "LLM", "llm")
+                        .input("in", "Text")
+                        .output("out", "Text"),
+                )
                 .edge("n1", "out", "n2", "in")
                 .height(400),
         )
@@ -733,9 +769,15 @@ async fn test_phase9_lot3_pdf_and_nodegraph() {
     // 1. Validation du rendu DOM
     let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
     assert!(html.contains(r#"data-kind="pdf""#), "Pdf mounted in DOM");
-    assert!(html.contains(r#"data-kind="nodegraph""#), "NodeGraph mounted in DOM");
+    assert!(
+        html.contains(r#"data-kind="nodegraph""#),
+        "NodeGraph mounted in DOM"
+    );
     assert!(html.contains(r#"data-id="pdf_viewer""#), "Pdf id in DOM");
-    assert!(html.contains(r#"data-id="dag_pipeline""#), "NodeGraph id in DOM");
+    assert!(
+        html.contains(r#"data-id="dag_pipeline""#),
+        "NodeGraph id in DOM"
+    );
 
     // 2. Validation de l'API predict
     let resp = http_post(
@@ -750,8 +792,6 @@ async fn test_phase9_lot3_pdf_and_nodegraph() {
         "Predict output should contain verification: {resp}"
     );
 }
-
-
 
 async fn http_get(url: &str) -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};

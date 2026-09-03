@@ -281,7 +281,11 @@ impl PageBuilder {
     }
 
     /// Ajoute un panneau (Panel) à la page.
-    pub fn panel(&mut self, label: impl Into<String>, task: impl FnOnce(&mut RowBuilder)) -> &mut Self {
+    pub fn panel(
+        &mut self,
+        label: impl Into<String>,
+        task: impl FnOnce(&mut RowBuilder),
+    ) -> &mut Self {
         let label = label.into();
         let mut b = RowBuilder::default();
         task(&mut b);
@@ -302,7 +306,11 @@ impl PageBuilder {
 
     /// Ajoute un conteneur d'onglets (Tabs) à la page.
     pub fn tabs(&mut self, task: impl FnOnce(Tabs) -> Tabs) -> &mut Self {
-        let t = task(Tabs::new(format!("{}-tabs-{}", self.id, self.children.len())));
+        let t = task(Tabs::new(format!(
+            "{}-tabs-{}",
+            self.id,
+            self.children.len()
+        )));
         self.children.push(Box::new(t));
         self
     }

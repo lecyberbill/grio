@@ -6,10 +6,10 @@
 //! 3. `DynamicContainer` : Injection réactive de composants à chaud via `ctx.append_component` et `ctx.replace_children`.
 //! 4. `ctx.set_visible` : Masquage et affichage dynamique de sections.
 
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::Arc;
 use grio::*;
 use serde_json::json;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -38,10 +38,34 @@ async fn main() -> Result<()> {
 
     // Ligne 2 : Grille DataEditor (Catalogue de services & SLA)
     let initial_data = vec![
-        vec![json!("SRV-01"), json!("Réinitialisation MDP"), json!(true), json!(1), json!("P1 - Critique")],
-        vec![json!("SRV-02"), json!("Accès VPN Distant"), json!(true), json!(4), json!("P2 - Haute")],
-        vec![json!("SRV-03"), json!("Demande de badge"), json!(false), json!(24), json!("P3 - Normale")],
-        vec![json!("SRV-04"), json!("Poste de travail neuf"), json!(true), json!(48), json!("P4 - Basse")],
+        vec![
+            json!("SRV-01"),
+            json!("Réinitialisation MDP"),
+            json!(true),
+            json!(1),
+            json!("P1 - Critique"),
+        ],
+        vec![
+            json!("SRV-02"),
+            json!("Accès VPN Distant"),
+            json!(true),
+            json!(4),
+            json!("P2 - Haute"),
+        ],
+        vec![
+            json!("SRV-03"),
+            json!("Demande de badge"),
+            json!(false),
+            json!(24),
+            json!("P3 - Normale"),
+        ],
+        vec![
+            json!("SRV-04"),
+            json!("Poste de travail neuf"),
+            json!(true),
+            json!(48),
+            json!("P4 - Basse"),
+        ],
     ];
 
     app = app.item(
@@ -69,15 +93,17 @@ async fn main() -> Result<()> {
 
     // Ligne 3 : DynamicContainer (Zone d'injection à chaud)
     app = app.item(
-        Row::new("r_slots")
-            .item(
-                Panel::new("p_slot_zone")
-                    .label("Zone de Conteneur Dynamique (Slots injectés à l'exécution)")
-                    .item(
-                        DynamicContainer::new("dynamic_slot")
-                            .item(Output::new("slot_initial").label("État du slot").value("Slot vide en attente d'injection...")),
+        Row::new("r_slots").item(
+            Panel::new("p_slot_zone")
+                .label("Zone de Conteneur Dynamique (Slots injectés à l'exécution)")
+                .item(
+                    DynamicContainer::new("dynamic_slot").item(
+                        Output::new("slot_initial")
+                            .label("État du slot")
+                            .value("Slot vide en attente d'injection..."),
                     ),
-            ),
+                ),
+        ),
     );
 
     // Gestionnaire : bascule de visibilité
@@ -104,7 +130,10 @@ async fn main() -> Result<()> {
             .label(format!("Composant injecté à chaud #{c}"))
             .value(format!("✅ Ticket #{c} validé et inspecté dynamiquement"));
         ctx.append_component("dynamic_slot", new_comp);
-        ctx.alert(AlertLevel::Success, format!("Composant #{c} injecté dans le slot !"));
+        ctx.alert(
+            AlertLevel::Success,
+            format!("Composant #{c} injecté dans le slot !"),
+        );
         Ok(())
     });
 

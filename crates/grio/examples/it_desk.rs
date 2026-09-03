@@ -9,11 +9,11 @@
 //! - Side Inspection Drawer for telemetry & user diagnostics (`Drawer`)
 //! - Service metrics & SLA indicators (`Metric`, `Progress`, `Plot`)
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use futures::StreamExt;
 use grio::*;
 use serde_json::json;
-use futures::StreamExt;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 const LM_STUDIO_DEFAULT_URL: &str = "http://localhost:1234/v1/chat/completions";
 
@@ -26,12 +26,54 @@ async fn main() -> Result<()> {
 
     // Initial IT Service Catalog data
     let service_catalog = vec![
-        vec![json!("SRV-101"), json!("Password Reset & MFA Setup"), json!("Identity & Access"), json!(1), json!(true), json!("P1 - Critical")],
-        vec![json!("SRV-102"), json!("Enterprise VPN & Remote Gateway"), json!("Networking"), json!(2), json!(true), json!("P2 - High")],
-        vec![json!("SRV-103"), json!("Physical Access Badge Issuance"), json!("Security"), json!(24), json!(false), json!("P3 - Normal")],
-        vec![json!("SRV-104"), json!("Workstation & Laptop Provisioning"), json!("Hardware"), json!(48), json!(true), json!("P3 - Normal")],
-        vec![json!("SRV-105"), json!("Microsoft Copilot & SaaS Licenses"), json!("Software"), json!(4), json!(true), json!("P2 - High")],
-        vec![json!("SRV-106"), json!("Conference Room Video/Audio Outage"), json!("AV Systems"), json!(1), json!(true), json!("P1 - Critical")],
+        vec![
+            json!("SRV-101"),
+            json!("Password Reset & MFA Setup"),
+            json!("Identity & Access"),
+            json!(1),
+            json!(true),
+            json!("P1 - Critical"),
+        ],
+        vec![
+            json!("SRV-102"),
+            json!("Enterprise VPN & Remote Gateway"),
+            json!("Networking"),
+            json!(2),
+            json!(true),
+            json!("P2 - High"),
+        ],
+        vec![
+            json!("SRV-103"),
+            json!("Physical Access Badge Issuance"),
+            json!("Security"),
+            json!(24),
+            json!(false),
+            json!("P3 - Normal"),
+        ],
+        vec![
+            json!("SRV-104"),
+            json!("Workstation & Laptop Provisioning"),
+            json!("Hardware"),
+            json!(48),
+            json!(true),
+            json!("P3 - Normal"),
+        ],
+        vec![
+            json!("SRV-105"),
+            json!("Microsoft Copilot & SaaS Licenses"),
+            json!("Software"),
+            json!(4),
+            json!(true),
+            json!("P2 - High"),
+        ],
+        vec![
+            json!("SRV-106"),
+            json!("Conference Room Video/Audio Outage"),
+            json!("AV Systems"),
+            json!(1),
+            json!(true),
+            json!("P1 - Critical"),
+        ],
     ];
 
     let ticket_counter = Arc::new(AtomicUsize::new(1042));
@@ -40,10 +82,37 @@ async fn main() -> Result<()> {
     // 1. HEADER & GLOBAL KPI METRICS
     app = app.item(
         Row::new("r_kpi")
-            .item(Metric::new("m_sla").label("SLA Compliance Rate").value("98.4").unit("%").delta("+1.2%").delta_color("pos"))
-            .item(Metric::new("m_resolved").label("Incidents Resolved This Month").value("142").unit("tickets").delta("+18"))
-            .item(Metric::new("m_mttr").label("Mean Time to Resolve (MTTR)").value("1.8").unit("hours").delta("-25 min").delta_color("pos"))
-            .item(Metric::new("m_status").label("LLM Engine").value("LM Studio").unit("Port 1234").delta("Local Active").delta_color("neutral")),
+            .item(
+                Metric::new("m_sla")
+                    .label("SLA Compliance Rate")
+                    .value("98.4")
+                    .unit("%")
+                    .delta("+1.2%")
+                    .delta_color("pos"),
+            )
+            .item(
+                Metric::new("m_resolved")
+                    .label("Incidents Resolved This Month")
+                    .value("142")
+                    .unit("tickets")
+                    .delta("+18"),
+            )
+            .item(
+                Metric::new("m_mttr")
+                    .label("Mean Time to Resolve (MTTR)")
+                    .value("1.8")
+                    .unit("hours")
+                    .delta("-25 min")
+                    .delta_color("pos"),
+            )
+            .item(
+                Metric::new("m_status")
+                    .label("LLM Engine")
+                    .value("LM Studio")
+                    .unit("Port 1234")
+                    .delta("Local Active")
+                    .delta_color("neutral"),
+            ),
     );
 
     // 2. MAIN NAVIGATION TABS
@@ -171,7 +240,11 @@ async fn main() -> Result<()> {
     app = app.item(
         Row::new("r_footer_actions")
             .item(Button::new("btn_ai_stream").label("🤖 Ask LM Studio (Live Streaming)"))
-            .item(Button::new("btn_inspect_user").label("👤 Requester Profile & Network Diagnostics (Drawer)").variant("secondary")),
+            .item(
+                Button::new("btn_inspect_user")
+                    .label("👤 Requester Profile & Network Diagnostics (Drawer)")
+                    .variant("secondary"),
+            ),
     );
 
     // 4. SIDE DRAWER FOR USER DIAGNOSTICS & TELEMETRY

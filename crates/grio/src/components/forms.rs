@@ -984,4 +984,3 @@ impl Component for RichText {
         })
     }
 }
-

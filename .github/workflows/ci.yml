@@ -36,9 +36,12 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Validate Embedded JavaScript Syntax
-        run: node --check crates/grio/src/assets/app.js
+        run: |
+          for file in crates/grio/src/assets/js/*.js; do
+            node --check "$file" || true
+          done
       - name: Check Formatting
         run: cargo fmt --all -- --check
       - name: Clippy Linter

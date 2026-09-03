@@ -1,11 +1,8 @@
 /* grio — moteur frontend (vanilla JS, zéro dépendance) */
-(function () {
-  'use strict';
+/* ---------- core ---------- */
 
-  /* ---------- core ---------- */
-
-  const registry = {};
-  const byId = {};
+const registry = {};
+const byId = {};
 
   let ws = null;
   let ready = false;

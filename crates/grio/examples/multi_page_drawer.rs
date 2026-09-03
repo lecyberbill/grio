@@ -52,17 +52,17 @@ async fn main() -> grio::Result<()> {
                     .label("⚙️ Open Settings Drawer (Right)")
                     .primary(),
             );
-            r.item(
-                Button::new("open_logs")
-                    .label("📋 Open System Logs (Bottom Sheet)"),
-            );
+            r.item(Button::new("open_logs").label("📋 Open System Logs (Bottom Sheet)"));
         });
 
         p.item(
             Chatbot::new("bot")
                 .label("AI Assistant")
                 .height(380)
-                .message("assistant", "Hello! Welcome to the new Multi-Page & Responsive interface of **grio**."),
+                .message(
+                    "assistant",
+                    "Hello! Welcome to the new Multi-Page & Responsive interface of **grio**.",
+                ),
         );
     });
 
@@ -85,9 +85,23 @@ async fn main() -> grio::Result<()> {
     // -----------------------------------------------------------------------
     app = app.page_with_icon("/config", "System Configuration", "⚙️", |p| {
         p.panel("Environment Settings", |pan| {
-            pan.item(Text::new("api_endpoint").label("LLM Endpoint URL").value("https://api.openai.com/v1"));
-            pan.item(Slider::new("timeout").label("Request Timeout (s)").min(5.0).max(120.0).value(30.0));
-            pan.item(Checkbox::new("auto_backup").label("Enable Automatic Backups").value(true));
+            pan.item(
+                Text::new("api_endpoint")
+                    .label("LLM Endpoint URL")
+                    .value("https://api.openai.com/v1"),
+            );
+            pan.item(
+                Slider::new("timeout")
+                    .label("Request Timeout (s)")
+                    .min(5.0)
+                    .max(120.0)
+                    .value(30.0),
+            );
+            pan.item(
+                Checkbox::new("auto_backup")
+                    .label("Enable Automatic Backups")
+                    .value(true),
+            );
         });
     });
 
@@ -99,11 +113,37 @@ async fn main() -> grio::Result<()> {
         .placement("right")
         .size(380)
         .content(|d| {
-            d.item(Slider::new("temp").label("Temperature").min(0.0).max(2.0).value(0.7));
-            d.item(Slider::new("top_p").label("Top-P").min(0.0).max(1.0).value(0.95));
-            d.item(Slider::new("rep_pen").label("Repetition Penalty").min(1.0).max(2.0).value(1.1));
-            d.item(Checkbox::new("stream").label("Enable Token Streaming").value(true));
-            d.item(Button::new("save_params_btn").label("Apply & Close").primary());
+            d.item(
+                Slider::new("temp")
+                    .label("Temperature")
+                    .min(0.0)
+                    .max(2.0)
+                    .value(0.7),
+            );
+            d.item(
+                Slider::new("top_p")
+                    .label("Top-P")
+                    .min(0.0)
+                    .max(1.0)
+                    .value(0.95),
+            );
+            d.item(
+                Slider::new("rep_pen")
+                    .label("Repetition Penalty")
+                    .min(1.0)
+                    .max(2.0)
+                    .value(1.1),
+            );
+            d.item(
+                Checkbox::new("stream")
+                    .label("Enable Token Streaming")
+                    .value(true),
+            );
+            d.item(
+                Button::new("save_params_btn")
+                    .label("Apply & Close")
+                    .primary(),
+            );
         });
     app = app.item(settings_drawer);
 

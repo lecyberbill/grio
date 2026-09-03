@@ -407,7 +407,10 @@ fn showcase_submit(ctx: &mut Context) -> Result<()> {
         out.push_str(&format!("• Text: {t}\n"));
     }
     if let Ok(rt) = ctx.get::<String>("sc_richtext") {
-        out.push_str(&format!("• RichText (Markdown length): {} chars\n", rt.len()));
+        out.push_str(&format!(
+            "• RichText (Markdown length): {} chars\n",
+            rt.len()
+        ));
     }
     if let Ok(n) = ctx.get::<f64>("num_items") {
         out.push_str(&format!("• Item count: {n}\n"));
