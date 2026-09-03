@@ -91,20 +91,20 @@ impl App {
             })
             .on_click("btn_inject_slot", |ctx| {
                 let new_box = Output::new("slot_dyn_metric")
-                    .label("Composant injecté à chaud (WebSocket Slot)")
-                    .value("✅ Nœud dynamique monté en temps réel avec zéro rechargement de page.");
+                    .label("Hot-Injected Component (WebSocket Slot)")
+                    .value("✅ Dynamic node mounted in real time with zero page refresh.");
                 ctx.append_component("sc_dynamic_slot", new_box);
-                ctx.alert(AlertLevel::Success, "Composant injecté dans le DynamicContainer !");
+                ctx.alert(AlertLevel::Success, "Component injected into DynamicContainer!");
                 Ok(())
             })
             .on_click("btn_clear_slot", |ctx| {
                 ctx.clear_container("sc_dynamic_slot");
-                ctx.alert(AlertLevel::Info, "DynamicContainer vidé.");
+                ctx.alert(AlertLevel::Info, "DynamicContainer cleared.");
                 Ok(())
             })
             .on_click("btn_toggle_drawer", |ctx| {
                 ctx.set_prop("sc_drawer", "open", true);
-                ctx.alert(AlertLevel::Info, "Tiroir d'inspection ouvert.");
+                ctx.alert(AlertLevel::Info, "Telemetry drawer opened.");
                 Ok(())
             })
             .on_submit(showcase_submit)
@@ -128,8 +128,8 @@ impl App {
                     });
                     b.item(RichText::new("sc_richtext")
                         .label("Markdown Micro-Editor (RichText / Toolbar)")
-                        .placeholder("Rédigez votre note en Markdown...")
-                        .value("### Déploiement Modèle IA\n- **Statut :** Prêt pour la production\n- **Inférence :** `vLLM` activé\n- **Sécurité :** Clé API requise")
+                        .placeholder("Type your notes in Markdown...")
+                        .value("### AI Model Deployment\n- **Status:** Production ready\n- **Inference:** `vLLM` engine enabled\n- **Security:** API Token required")
                         .lines(5));
                     b.row(|r| {
                         r.item(Slider::new("sc_slider").label("Temperature (Slider)").min(0.0).max(1.0).step(0.05).value(0.7));
@@ -212,18 +212,18 @@ impl App {
                     b.item(DataEditor::new("sc_dataeditor")
                         .label("Interactive Data Grid & Editor (DataEditor: Typed columns, Checkboxes, Ctrl+V TSV/CSV)")
                         .column("id", "ID", ColumnType::Text)
-                        .column("service", "Service IT", ColumnType::Text)
-                        .column("active", "Actif", ColumnType::Boolean)
-                        .column("sla_hours", "SLA (h)", ColumnType::Number)
-                        .column("priority", "Priorité", ColumnType::Dropdown(vec![
-                            "P1 - Critique".into(),
-                            "P2 - Haute".into(),
-                            "P3 - Normale".into(),
+                        .column("service", "IT Service", ColumnType::Text)
+                        .column("active", "Active", ColumnType::Boolean)
+                        .column("sla_hours", "SLA (hrs)", ColumnType::Number)
+                        .column("priority", "Priority", ColumnType::Dropdown(vec![
+                            "P1 - Critical".into(),
+                            "P2 - High".into(),
+                            "P3 - Normal".into(),
                         ]))
                         .data(vec![
-                            vec![serde_json::json!("SRV-01"), serde_json::json!("Réinitialisation MDP"), serde_json::json!(true), serde_json::json!(1), serde_json::json!("P1 - Critique")],
-                            vec![serde_json::json!("SRV-02"), serde_json::json!("Accès VPN Distant"), serde_json::json!(true), serde_json::json!(4), serde_json::json!("P2 - Haute")],
-                            vec![serde_json::json!("SRV-03"), serde_json::json!("Badge d'accès"), serde_json::json!(false), serde_json::json!(24), serde_json::json!("P3 - Normale")],
+                            vec![serde_json::json!("SRV-01"), serde_json::json!("Password Reset"), serde_json::json!(true), serde_json::json!(1), serde_json::json!("P1 - Critical")],
+                            vec![serde_json::json!("SRV-02"), serde_json::json!("Remote VPN Access"), serde_json::json!(true), serde_json::json!(4), serde_json::json!("P2 - High")],
+                            vec![serde_json::json!("SRV-03"), serde_json::json!("Security Badge"), serde_json::json!(false), serde_json::json!(24), serde_json::json!("P3 - Normal")],
                         ])
                         .allow_add(true)
                         .allow_delete(true)
@@ -341,18 +341,18 @@ impl App {
                         ]));
                     b.row(|r| {
                         r.item(Button::new("btn_bot_stream").label("Simulate LLM Stream"));
-                        r.item(Button::new("btn_toggle_drawer").label("📂 Ouvrir Tiroir d'Inspection (Drawer)"));
+                        r.item(Button::new("btn_toggle_drawer").label("📂 Open Telemetry Drawer"));
                         r.item(WithLayout::new(Button::new("btn_gencsv").label("Generate CSV Export").secondary()).scale(1));
                         r.item(DownloadButton::new("dl_btn").label("Download CSV").filename("export_grio.csv"));
                     });
                     b.row(|r| {
-                        r.item(Button::new("btn_inject_slot").label("➕ Injecter Composant (Slot)"));
-                        r.item(Button::new("btn_clear_slot").label("🗑 Vider Slot").secondary());
+                        r.item(Button::new("btn_inject_slot").label("➕ Inject Component (Slot)"));
+                        r.item(Button::new("btn_clear_slot").label("🗑 Clear Slot").secondary());
                     });
                     b.item(Panel::new("p_slot_panel")
-                        .label("Zone de Conteneur Dynamique (DynamicContainer)")
+                        .label("Dynamic Container Zone (DynamicContainer)")
                         .item(DynamicContainer::new("sc_dynamic_slot")
-                            .item(Output::new("sc_slot_init").label("Slot Initial").value("En attente d'injection dynamique..."))));
+                            .item(Output::new("sc_slot_init").label("Initial Slot").value("Waiting for dynamic injection..."))));
                     b.item(Plot::new("sc_plot")
                         .label("Native SVG Chart (zero dependencies)")
                         .data(&serde_json::json!({

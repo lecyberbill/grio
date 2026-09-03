@@ -5,14 +5,14 @@ use grio::*;
 
 fn main() -> grio::Result<()> {
     App::new("Greet · grio demo")
-        .subtitle("Un équivalent minimal à Gradio — serveur, composants, événements et temps réel en Rust.")
+        .subtitle("A fast pure-Rust Gradio alternative — server, components, events and real-time streaming.")
         .add(
             Markdown::new("intro").text(
-                "# Bienvenue\n\nCeci est un rendu **Markdown** servi par le moteur.\nSaisissez un nom, choisissez une intensité, puis cliquez sur *Run*.",
+                "# Welcome\n\nThis is a **Markdown** view served by the engine.\nEnter a name, select intensity, then click *Run*.",
             ),
         )
         .row(|r| {
-            r.item(Text::new("name").label("Name").value("World").placeholder("Votre nom…"));
+            r.item(Text::new("name").label("Name").value("World").placeholder("Your name…"));
             r.item(
                 Slider::new("intensity")
                     .label("Intensity")
@@ -23,18 +23,18 @@ fn main() -> grio::Result<()> {
             );
         })
         .item(Output::new("greeting").label("Greeting"))
-        .panel("Temps réel — streaming, progress, alertes", |p| {
+        .panel("Real-time — streaming, progress, alerts", |p| {
             p.item(
                 Markdown::new("rt").text(
-                    "Cliquez sur **Lancer** : le handler tourne en arrière-plan (file d'attente + pool de threads), les fragments sont **poussés en continu** et la barre progresse. Re-cliquez pour **annuler**.",
+                    "Click **Generate**: the handler runs in the background pool, tokens are **streamed in real time** and the progress bar updates. Click again to **cancel**.",
                 ),
             );
-            p.item(Progress::new("pg").label("Génération"));
-            p.item(Output::new("log").label("Sortie en streaming"));
-            p.item(Button::new("generate").label("Lancer la génération"));
+            p.item(Progress::new("pg").label("Generation"));
+            p.item(Output::new("log").label("Streaming Output"));
+            p.item(Button::new("generate").label("Start Generation"));
         })
         .on_event("reset", |_ctx| {
-            println!("[event] reset ← serveur");
+            println!("[event] reset ← server");
             Ok(())
         })
         .on_submit(|ctx| {
@@ -45,21 +45,19 @@ fn main() -> grio::Result<()> {
             Ok(())
         })
         .on_click("generate", |ctx| {
-            // Tâche longue simulée : le handler reste synchrone, le moteur
-            // l'exécute sur un thread de travail et pousse les mises à jour.
-            ctx.set("log", "démarrage…\n");
+            // Simulated long task: handler runs on background worker thread
+            ctx.set("log", "Starting…\n");
             for i in 1..=10 {
                 if ctx.cancelled() {
-                    ctx.alert(AlertLevel::Warn, "Génération annulée");
+                    ctx.alert(AlertLevel::Warn, "Generation cancelled");
                     return Ok(());
                 }
-                ctx.progress("pg", i as f64 / 10.0, format!("étape {i}/10"));
+                ctx.progress("pg", i as f64 / 10.0, format!("step {i}/10"));
                 ctx.append("log", format!("token {i}\n"));
                 thread::sleep(Duration::from_millis(350));
             }
-            ctx.alert(AlertLevel::Success, "Génération terminée");
+            ctx.alert(AlertLevel::Success, "Generation completed");
             Ok(())
         })
-        .launch("127.0.0.1:7860")?;
-    Ok(())
+        .launch("127.0.0.1:7860")
 }

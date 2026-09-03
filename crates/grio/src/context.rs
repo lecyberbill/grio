@@ -246,6 +246,27 @@ impl Context {
         }));
     }
 
+    /// **Streaming Big Data / Dataframe / DataEditor** : injecte un lot de lignes (batch)
+    /// dans une table existante sans écraser les données précédentes (pour flux Snowflake / Polars).
+    ///
+    /// ```rust
+    /// # use grio::*;
+    /// # fn example(ctx: &mut Context) {
+    /// ctx.append_rows("analytics_grid", vec![
+    ///     vec![serde_json::json!("TX-9901"), serde_json::json!(42.50)],
+    ///     vec![serde_json::json!("TX-9902"), serde_json::json!(108.20)],
+    /// ]);
+    /// # }
+    /// ```
+    pub fn append_rows(&mut self, id: impl Into<String>, rows: Vec<Vec<serde_json::Value>>) {
+        let id = id.into();
+        self.send(json!({
+            "t": "patch",
+            "c": id,
+            "append_rows": rows,
+        }));
+    }
+
     /// **Streaming** : ajoute un fragment à la valeur d'un composant
     /// (les fragments sont concaténés côté client). Poussé immédiatement,
     /// uniquement en temps réel — absent de la réponse finale.

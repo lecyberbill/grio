@@ -789,8 +789,19 @@
       let rows = Array.isArray(p.data) ? p.data.map((r) => (Array.isArray(r) ? r.slice() : [])) : [];
       let sortCol = null;
       let sortDir = 1;
+      let searchQuery = '';
+      const ROW_HEIGHT = 38;
+      const BUFFER_COUNT = 15;
 
       const getColDef = (idx) => columns[idx] || { id: 'col_' + idx, label: 'Col ' + (idx + 1), type: 'text', editable: true };
+
+      const getFilteredRows = () => {
+        if (!searchQuery) return rows;
+        const q = searchQuery.toLowerCase();
+        return rows.filter((row) => {
+          return row.some((val) => val != null && String(val).toLowerCase().includes(q));
+        });
+      };
 
       const sortRows = () => {
         if (sortCol === null) return;
@@ -826,14 +837,30 @@
         });
       };
 
-      const render = () => {
-        tableContainer.innerHTML = '';
-        const table = document.createElement('table');
-        table.className = 'mg-table mg-dataeditor-table';
+      // Table & Structure DOM
+      const table = document.createElement('table');
+      table.className = 'mg-table mg-dataeditor-table';
 
-        const thead = document.createElement('thead');
-        const headerRow = document.createElement('tr');
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+      const tbody = document.createElement('tbody');
 
+      const topSpacer = document.createElement('tr');
+      topSpacer.className = 'mg-virtual-spacer';
+      const topSpacerCell = document.createElement('td');
+      topSpacer.appendChild(topSpacerCell);
+
+      const bottomSpacer = document.createElement('tr');
+      bottomSpacer.className = 'mg-virtual-spacer';
+      const bottomSpacerCell = document.createElement('td');
+      bottomSpacer.appendChild(bottomSpacerCell);
+
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      tableContainer.appendChild(table);
+
+      const updateHeader = () => {
+        headerRow.innerHTML = '';
         columns.forEach((col, cIdx) => {
           const th = document.createElement('th');
           th.className = 'mg-dataeditor-th' + (p.sortable !== false ? ' sortable' : '');
@@ -872,12 +899,49 @@
           thOps.style.width = '48px';
           headerRow.appendChild(thOps);
         }
+        thead.innerHTML = '';
         thead.appendChild(headerRow);
-        table.appendChild(thead);
+      };
 
-        const tbody = document.createElement('tbody');
-        rows.forEach((row, rIdx) => {
+      // Moteur de rendu virtuel (Windowing)
+      let ticking = false;
+      const render = () => {
+        updateHeader();
+        const filtered = getFilteredRows();
+        const totalRows = filtered.length;
+        const totalCols = columns.length + (p.allow_delete !== false && p.interactive !== false ? 1 : 0);
+        topSpacerCell.colSpan = totalCols;
+        bottomSpacerCell.colSpan = totalCols;
+
+        // Si moins de 50 lignes, rendu direct sans virtualisation
+        const isVirtual = totalRows > 50 && p.max_height;
+        const scrollTop = tableContainer.scrollTop || 0;
+        const viewportHeight = tableContainer.clientHeight || 400;
+
+        let startIdx = 0;
+        let endIdx = totalRows;
+
+        if (isVirtual) {
+          startIdx = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - BUFFER_COUNT);
+          endIdx = Math.min(totalRows, Math.ceil((scrollTop + viewportHeight) / ROW_HEIGHT) + BUFFER_COUNT);
+        }
+
+        const topHeight = startIdx * ROW_HEIGHT;
+        const bottomHeight = Math.max(0, (totalRows - endIdx) * ROW_HEIGHT);
+
+        topSpacer.style.height = topHeight + 'px';
+        bottomSpacer.style.height = bottomHeight + 'px';
+        topSpacer.style.display = topHeight > 0 ? '' : 'none';
+        bottomSpacer.style.display = bottomHeight > 0 ? '' : 'none';
+
+        tbody.innerHTML = '';
+        if (topHeight > 0) tbody.appendChild(topSpacer);
+
+        for (let rIdx = startIdx; rIdx < endIdx; rIdx++) {
+          const row = filtered[rIdx];
           const tr = document.createElement('tr');
+          tr.style.height = ROW_HEIGHT + 'px';
+
           columns.forEach((col, cIdx) => {
             const td = document.createElement('td');
             const val = row[cIdx] !== undefined ? row[cIdx] : '';
@@ -951,29 +1015,44 @@
             delBtn.textContent = '✕';
             delBtn.title = 'Supprimer cette ligne';
             delBtn.addEventListener('click', () => {
-              rows.splice(rIdx, 1);
-              render();
-              commit();
+              const originalIdx = rows.indexOf(row);
+              if (originalIdx >= 0) {
+                rows.splice(originalIdx, 1);
+                render();
+                commit();
+              }
             });
             tdOps.appendChild(delBtn);
             tr.appendChild(tdOps);
           }
           tbody.appendChild(tr);
-        });
+        }
 
-        table.appendChild(tbody);
-        tableContainer.appendChild(table);
+        if (bottomHeight > 0) tbody.appendChild(bottomSpacer);
       };
 
-      if (p.interactive !== false) {
+      // Écouteur de scroll optimisé par requestAnimationFrame
+      tableContainer.addEventListener('scroll', () => {
+        if (!ticking) {
+          window.requestAnimationFrame(() => {
+            render();
+            ticking = false;
+          });
+          ticking = true;
+        }
+      });
+
+      // Construction de la barre d'outils analytique
+      const updateToolbar = () => {
         toolbar.innerHTML = '';
-        if (p.allow_add !== false) {
+
+        if (p.interactive !== false && p.allow_add !== false) {
           const addBtn = document.createElement('button');
           addBtn.type = 'button';
           addBtn.className = 'mg-btn mg-btn-secondary';
           addBtn.textContent = '+ Ajouter une ligne';
           addBtn.addEventListener('click', () => {
-            const newRow = columns.map((c) => (c.type === 'boolean' ? false : (c.type === 'number' ? 0 : '')));
+            const newRow = columns.map((col) => (col.type === 'boolean' ? false : (col.type === 'number' ? 0 : '')));
             rows.push(newRow);
             render();
             commit();
@@ -981,52 +1060,85 @@
           toolbar.appendChild(addBtn);
         }
 
-        if (p.allow_paste !== false) {
-          const pasteHint = document.createElement('span');
-          pasteHint.className = 'mg-dataeditor-paste-hint';
-          pasteHint.textContent = '📋 Coller (Ctrl+V) supporté (CSV / Excel)';
-          toolbar.appendChild(pasteHint);
+        // Champ de recherche / filtrage en direct
+        const searchInput = document.createElement('input');
+        searchInput.type = 'search';
+        searchInput.className = 'mg-input mg-dataeditor-search';
+        searchInput.placeholder = '🔍 Filtrer les données...';
+        searchInput.value = searchQuery;
+        searchInput.addEventListener('input', (e) => {
+          searchQuery = e.target.value.trim();
+          render();
+        });
+        toolbar.appendChild(searchInput);
 
-          wrap.addEventListener('paste', (e) => {
-            const clipText = (e.clipboardData || window.clipboardData).getData('text');
-            if (!clipText || !clipText.includes('\t') && !clipText.includes('\n') && !clipText.includes(';')) return;
-            e.preventDefault();
-            const pastedData = parseClipboard(clipText);
-            if (!pastedData.length) return;
+        // Compteur de lignes Big Data
+        const countBadge = document.createElement('span');
+        countBadge.className = 'mg-dataeditor-count';
+        countBadge.textContent = `${rows.length.toLocaleString()} lignes`;
+        toolbar.appendChild(countBadge);
 
-            pastedData.forEach((pRow) => {
-              const formattedRow = columns.map((col, idx) => {
-                const rawVal = pRow[idx] !== undefined ? pRow[idx].trim() : '';
-                if (col.type === 'boolean') {
-                  return rawVal.toLowerCase() === 'true' || rawVal === '1' || rawVal.toLowerCase() === 'oui';
-                }
-                if (col.type === 'number') {
-                  const num = Number(rawVal);
-                  return isNaN(num) ? 0 : num;
-                }
-                return rawVal;
-              });
-              rows.push(formattedRow);
-            });
-            render();
-            commit();
-            toast(`Données collées (${pastedData.length} lignes ajoutées)`, 'success');
+        // Export CSV rapide
+        const exportBtn = document.createElement('button');
+        exportBtn.type = 'button';
+        exportBtn.className = 'mg-btn mg-btn-secondary mg-dataeditor-export';
+        exportBtn.textContent = '⬇ CSV';
+        exportBtn.title = 'Exporter les données au format CSV';
+        exportBtn.addEventListener('click', () => {
+          let csv = columns.map((col) => `"${(col.label || col.id).replace(/"/g, '""')}"`).join(',') + '\n';
+          rows.forEach((r) => {
+            csv += r.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',') + '\n';
           });
-        }
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'export_data.csv';
+          a.click();
+          URL.revokeObjectURL(url);
+        });
+        toolbar.appendChild(exportBtn);
+      };
+
+      if (p.allow_paste !== false && p.interactive !== false) {
+        wrap.addEventListener('paste', (e) => {
+          const text = (e.clipboardData || window.clipboardData).getData('text');
+          if (text) {
+            const pasted = parseClipboard(text);
+            if (pasted.length > 0) {
+              e.preventDefault();
+              pasted.forEach((pRow) => {
+                const newRow = columns.map((col, idx) => {
+                  const raw = pRow[idx] !== undefined ? pRow[idx] : '';
+                  if (col.type === 'number') return isNaN(Number(raw)) ? 0 : Number(raw);
+                  if (col.type === 'boolean') return raw === 'true' || raw === '1' || raw === 'oui';
+                  return raw;
+                });
+                rows.push(newRow);
+              });
+              updateToolbar();
+              render();
+              commit();
+              toast(`${pasted.length} lignes collées`, 'success');
+            }
+          }
+        });
       }
 
+      updateToolbar();
       render();
 
       c.getValue = () => ({ columns, data: rows });
       c.apply = (patch) => {
         if (Array.isArray(patch.columns)) columns = patch.columns;
         if (Array.isArray(patch.data)) rows = patch.data.map((r) => (Array.isArray(r) ? r.slice() : []));
-        if (patch.value && typeof patch.value === 'object') {
-          if (Array.isArray(patch.value.columns)) columns = patch.value.columns;
-          if (Array.isArray(patch.value.data)) rows = patch.value.data.map((r) => (Array.isArray(r) ? r.slice() : []));
-          if (Array.isArray(patch.value)) rows = patch.value.map((r) => (Array.isArray(r) ? r.slice() : []));
+        if (Array.isArray(patch.append_rows)) {
+          patch.append_rows.forEach((r) => {
+            if (Array.isArray(r)) rows.push(r.slice());
+          });
         }
         if (patch.visible != null) c.el.hidden = !patch.visible;
+        updateToolbar();
         render();
       };
     }

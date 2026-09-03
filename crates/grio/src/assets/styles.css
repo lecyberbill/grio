@@ -3096,6 +3096,43 @@ body.mg-has-sidebar {
   width: 48px;
 }
 
+.mg-virtual-spacer {
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+.mg-virtual-spacer td {
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  height: inherit;
+}
+
+.mg-dataeditor-search {
+  max-width: 240px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  margin-left: auto;
+}
+
+.mg-dataeditor-count {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--mg-text-muted);
+  padding: 4px 8px;
+  background: var(--mg-surface-2);
+  border-radius: var(--mg-radius-sm);
+  white-space: nowrap;
+}
+
+.mg-dataeditor-export {
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 /* ---------- DynamicContainer Slots ---------- */
 .mg-slot {
   display: flex;

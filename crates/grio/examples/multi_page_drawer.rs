@@ -1,12 +1,12 @@
-//! # Exemple Phase 9 Lot 1 — Multi-Page SPA, Drawers & Responsive Layout
+//! # Multi-Page SPA, Drawers & Responsive Layout — Phase 9 Lot 1 Example
 //!
-//! Cet exemple montre :
-//! - Une application multi-pages avec routage déclaratif (`app.page`)
-//! - La navigation via sidebar automatique (et drawer mobile sur smartphone)
-//! - Des tiroirs coulissants (`Drawer`) à droite et en bas (bottom-sheet)
-//! - Des handlers réactifs ouvrant et fermant les tiroirs
+//! Demonstrates:
+//! - Multi-page application with declarative routing (`app.page`)
+//! - Automatic responsive sidebar navigation (with mobile slide-out drawer)
+//! - Sliding side drawers (`Drawer`) on the right and bottom (bottom-sheet)
+//! - Reactive handlers dynamically opening and closing drawers
 //!
-//! Lancez avec :
+//! Run with:
 //! ```bash
 //! cargo run -p grio --example multi_page_drawer
 //! ```

@@ -315,6 +315,23 @@ A complete, production-grade enterprise demonstration app showcasing real-world 
 
 ---
 
+## Phase 10 — High-Throughput Big Data, Virtual Grid & Data Streams (Snowflake / Polars) · ⏳ [P0]
+
+> **In Progress.** Enabling seamless streaming and sub-millisecond manipulation of massive 
+> datasets (100k+ rows) from modern warehouses (Snowflake, DuckDB, Polars, Arrow) with zero browser freezing.
+
+### 📦 Lot 1 — DOM Virtualization Engine (`DataEditor` & `Dataframe`) · ⏳
+- **10.1 High-Performance Virtual Scroll**: Dynamic viewport windowing rendering only visible rows (~25 rows + 10 buffer rows) across millions of total rows at 60 fps.
+- **10.2 Chunked / Streaming Table Ingestion**: Ability to stream incremental batches of rows into `DataEditor` / `Dataframe` via `ctx.append_rows(id, batch)`.
+- **10.3 Quick Search & Column Filtering**: Client-side Instant Full-Text Filter and multi-column sorting without backend round-trip latency.
+- **Files**: `assets/js/data.js`, `crates/grio/src/components/data.rs`, `crates/grio/src/context.rs`, `assets/styles.css`.
+
+### 📦 Lot 2 — Big Data & Data Warehouse Connectors Showcase (`examples/snowflake_stream.rs`) · ⏳
+- **10.4 Snowflake / DuckDB Analytical Stream Demo**: Real-time analytical dashboard rendering 100,000+ transaction rows with live search, aggregation metrics, and instant CSV/Parquet export.
+- **Files**: `examples/snowflake_stream.rs`, `tests/api_predict.rs`.
+
+---
+
 ## Roadmap Conventions
 
 1. One task = one checked box + an entry in `README.md`.
