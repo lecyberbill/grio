@@ -85,11 +85,36 @@ fn main() -> Result<()> {
             let preset = ctx.get_str("dd_preset").unwrap_or("Tokyo Night").to_string();
             let intensity = ctx.get::<f64>("s_intensity").unwrap_or(75.0);
 
+            let (theme, primary_hex, radius_val, font_val) = match preset.as_str() {
+                "Nord Polar" => (Theme::nord(), "#88c0d0", "8px", "Inter"),
+                "Cyberpunk" => (Theme::cyberpunk(), "#f43f5e", "4px", "JetBrains Mono"),
+                "Catppuccin Mocha" => (Theme::catppuccin_mocha(), "#cba6f7", "12px", "Inter"),
+                "Corporate Light" => (Theme::corporate(), "#2563eb", "6px", "Roboto"),
+                _ => (Theme::tokyo_night(), "#7aa2f7", "10px", "Inter"),
+            };
+
+            // Hot-swap CSS theme variables in real-time across connected browser clients
+            ctx.set_theme(theme);
+
+            // Update design token indicators
+            ctx.set("m_primary", primary_hex);
+            ctx.set("m_radius", radius_val.trim_end_matches("px"));
+            ctx.set("m_font", font_val);
+
             let summary = format!(
-                "✓ Project: {name}\n✓ Active Palette: {preset}\n✓ Accent Intensity: {intensity}%\n✓ CSS Variables: Auto-injected at runtime",
+                "✓ Project: {name}\n✓ Active Palette: {preset}\n✓ Primary Color: {primary_hex}\n✓ Border Radius: {radius_val}\n✓ Typography: {font_val}\n✓ Accent Intensity: {intensity}%\n✓ Live CSS Variables: Injected via WebSocket hot-swap!",
             );
             ctx.set("out_preview", summary);
-            ctx.alert(AlertLevel::Success, format!("Theme token applied: {preset}"));
+            ctx.alert(AlertLevel::Success, format!("Theme hot-swapped to: {preset}"));
+            Ok(())
+        })
+        .on_click("btn_reset", |ctx| {
+            ctx.set_theme(Theme::tokyo_night());
+            ctx.set("m_primary", "#7aa2f7");
+            ctx.set("m_radius", "10");
+            ctx.set("m_font", "Inter");
+            ctx.set("out_preview", "✓ Reset to default Tokyo Night theme.");
+            ctx.alert(AlertLevel::Info, "Reset to Tokyo Night preset.");
             Ok(())
         })
         .launch("127.0.0.1:7860")

@@ -298,6 +298,23 @@ impl Context {
         // Note : les alertes ne sont pas accumulées dans `all`.
     }
 
+    /// **Changement dynamique de thème à chaud** : applique un nouveau `Theme`
+    /// en temps réel sur le navigateur du client sans recharger la page.
+    pub fn set_theme(&mut self, theme: crate::app::Theme) {
+        let mode_str = match theme.mode {
+            crate::app::ThemeMode::Dark => "dark",
+            crate::app::ThemeMode::Light => "light",
+            crate::app::ThemeMode::System => "system",
+        };
+        self.send(json!({
+            "t": "theme",
+            "mode": mode_str,
+            "primary": theme.primary,
+            "radius": theme.radius,
+            "font": theme.font,
+        }));
+    }
+
     /// `true` si le job courant a été annulé (nouveau déclenchement sur la
     /// même action). À vérifier dans les boucles longues.
     pub fn cancelled(&self) -> bool {

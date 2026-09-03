@@ -133,6 +133,28 @@ const byId = {};
             });
           }
         }
+      } else if (m.t === 'theme') {
+        const root = document.documentElement;
+        if (m.mode) {
+          if (m.mode === 'dark') root.setAttribute('data-theme', 'dark');
+          else if (m.mode === 'light') root.setAttribute('data-theme', 'light');
+          else root.removeAttribute('data-theme');
+        }
+        if (m.primary) {
+          root.style.setProperty('--mg-primary', m.primary);
+          root.style.setProperty('--mg-accent', m.primary);
+          root.style.setProperty('--mg-accent-2', m.primary);
+          root.style.setProperty('--mg-primary-hover', m.primary + 'ee');
+        }
+        if (m.radius) {
+          root.style.setProperty('--mg-radius', m.radius);
+          root.style.setProperty('--mg-radius-sm', `calc(${m.radius} * 0.6)`);
+          root.style.setProperty('--mg-radius-lg', `calc(${m.radius} * 1.5)`);
+        }
+        if (m.font) {
+          root.style.setProperty('--mg-font-family', m.font);
+          root.style.setProperty('--mg-font', m.font);
+        }
       } else if (m.t === 'alert') {
         toast(m.m || '—', m.level || 'info');
       } else if (m.t === 'error') {

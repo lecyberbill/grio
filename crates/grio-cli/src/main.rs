@@ -12,7 +12,7 @@ fn main() {
     match args[1].as_str() {
         "new" => {
             if args.len() < 3 {
-                eprintln!("Usage: grio new <project-name> [--template <greet|chatbot|vision>]");
+                eprintln!("Usage: grio new <project-name> [--template <greet|chatbot|agent|bigdata|vision>]");
                 std::process::exit(1);
             }
             let name = &args[2];
@@ -22,6 +22,14 @@ fn main() {
                 "greet"
             };
             create_project(name, template);
+        }
+        "docker" => {
+            let app_name = if args.len() >= 3 {
+                &args[2]
+            } else {
+                "grio-app"
+            };
+            generate_docker(app_name);
         }
         "showcase" | "demo" => {
             let mut port = "7860".to_string();
@@ -67,17 +75,68 @@ USAGE:
 COMMANDS:
     showcase [--port <7860>]        Launch interactive gallery showcasing all grio components
     new <name> [--template <name>]  Create a new grio app project
-                                    Templates: greet (default), chatbot, vision
+                                    Templates: greet (default), chatbot, agent, bigdata, vision
+    docker [<app-name>]             Generate production-ready multi-stage Dockerfile (~15MB image)
     version                         Display CLI version
     help                            Show this help message
 
 EXAMPLES:
     grio showcase
-    grio new my-chat-app --template chatbot
-    cd my-chat-app
+    grio new my-agent --template agent
+    grio docker my-app
+    cd my-agent
     cargo run
 "#
     );
+}
+
+fn generate_docker(app_name: &str) {
+    let dockerfile_content = format!(
+        r#"# Multi-stage lightweight build for {app_name}
+# Produces a single static binary image (~15 MB) with zero Node/NPM dependencies
+
+# Stage 1: Build binary
+FROM rust:1.80-alpine AS builder
+RUN apk add --no-cache musl-dev
+
+WORKDIR /app
+COPY . .
+RUN cargo build --release
+
+# Stage 2: Minimal runtime image
+FROM alpine:3.20 AS runner
+WORKDIR /app
+
+# Copy compiled standalone binary
+COPY --from=builder /app/target/release/{app_name} /app/server
+
+# Expose default grio port
+EXPOSE 7860
+
+ENV HOST=0.0.0.0
+ENV PORT=7860
+
+ENTRYPOINT ["/app/server"]
+"#
+    );
+
+    let compose_content = format!(
+        r#"services:
+  {app_name}:
+    build: .
+    ports:
+      - "7860:7860"
+    environment:
+      - RUST_LOG=info
+    restart: unless-stopped
+"#
+    );
+
+    fs::write("Dockerfile", dockerfile_content).expect("failed to write Dockerfile");
+    fs::write("docker-compose.yml", compose_content).expect("failed to write docker-compose.yml");
+
+    println!("✓ Generated lightweight Dockerfile and docker-compose.yml for `{app_name}`!");
+    println!("  docker compose up --build");
 }
 
 fn create_project(name: &str, template: &str) {
@@ -97,10 +156,87 @@ edition = "2021"
 
 [dependencies]
 grio = "0.1.0"
+tokio = {{ version = "1", features = ["full"] }}
+serde_json = "1"
 "#
     );
 
     let main_rs = match template {
+        "agent" => {
+            r#"use grio::*;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let mut app = App::new("AI Agent Hub")
+        .subtitle("Connected to Local LM Studio / Ollama Gateway")
+        .theme(Theme::tokyo_night())
+        .item(
+            Chatbot::new("chat")
+                .label("AI Assistant")
+                .message("assistant", "Hello! How can I assist your workflow today?")
+        )
+        .row(|r| {
+            r.item(Text::new("prompt").placeholder("Ask anything..."));
+            r.item(Button::new("send").label("Send").primary());
+        });
+
+    app = app.on_click("send", |ctx| {
+        let prompt: String = ctx.get("prompt").unwrap_or_default();
+        if prompt.trim().is_empty() { return Ok(()); }
+
+        let mut hist: Vec<ChatMessage> = ctx.get("chat").unwrap_or_default();
+        hist.push(ChatMessage::user(&prompt));
+        hist.push(ChatMessage::assistant(""));
+        ctx.set("chat", hist.clone());
+        ctx.set("prompt", "");
+
+        let response = format!("Answering for: **{prompt}**\n\nHigh-performance AI served by pure Rust.");
+        for word in response.split_inclusive(' ') {
+            ctx.append("chat", word);
+            std::thread::sleep(std::time::Duration::from_millis(30));
+        }
+
+        if let Some(last) = hist.last_mut() {
+            last.content = response;
+        }
+        ctx.set("chat", hist);
+        Ok(())
+    });
+
+    app.serve("0.0.0.0:7860").await
+}
+"#
+        }
+        "bigdata" => {
+            r#"use grio::*;
+use serde_json::json;
+
+fn main() -> Result<()> {
+    let mut initial_data = Vec::new();
+    for i in 1..=500 {
+        initial_data.push(vec![
+            json!(format!("TXN-{:05}", i)),
+            json!(format!("Node-{}", (i % 8) + 1)),
+            json!(((i * 17) % 3000) as f64 + 10.5),
+            json!(true),
+        ]);
+    }
+
+    App::new("Big Data Stream")
+        .subtitle("Virtualized 60 FPS Grid for massive datasets")
+        .item(
+            DataEditor::new("grid")
+                .column("id", "Transaction ID", ColumnType::Text)
+                .column("node", "Compute Node", ColumnType::Text)
+                .column("amount", "Amount ($)", ColumnType::Number)
+                .column("verified", "Verified", ColumnType::Boolean)
+                .data(initial_data)
+                .max_height(450)
+        )
+        .launch("0.0.0.0:7860")
+}
+"#
+        }
         "chatbot" => {
             r#"use grio::*;
 
