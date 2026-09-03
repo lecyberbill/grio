@@ -35,7 +35,9 @@ fn main() {
                 }
             }
             let addr = format!("0.0.0.0:{port}");
-            println!("🚀 Starting grio Interactive Component Showcase on http://localhost:{port} ...");
+            println!(
+                "🚀 Starting grio Interactive Component Showcase on http://localhost:{port} ..."
+            );
             if let Err(e) = grio::App::showcase().launch(&addr) {
                 eprintln!("Error running showcase: {e}");
                 std::process::exit(1);
@@ -56,7 +58,8 @@ fn main() {
 }
 
 fn print_help() {
-    println!(r#"grio CLI — Fast, declarative AI app generator in Rust
+    println!(
+        r#"grio CLI — Fast, declarative AI app generator in Rust
 
 USAGE:
     grio <COMMAND> [OPTIONS]
@@ -73,7 +76,8 @@ EXAMPLES:
     grio new my-chat-app --template chatbot
     cd my-chat-app
     cargo run
-"#);
+"#
+    );
 }
 
 fn create_project(name: &str, template: &str) {
@@ -85,17 +89,20 @@ fn create_project(name: &str, template: &str) {
 
     fs::create_dir_all(path.join("src")).expect("failed to create src directory");
 
-    let cargo_toml = format!(r#"[package]
+    let cargo_toml = format!(
+        r#"[package]
 name = "{name}"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 grio = "0.1.0"
-"#);
+"#
+    );
 
     let main_rs = match template {
-        "chatbot" => r#"use grio::*;
+        "chatbot" => {
+            r#"use grio::*;
 
 fn main() -> grio::Result<()> {
     App::new("Chatbot AI")
@@ -121,8 +128,10 @@ fn main() -> grio::Result<()> {
         })
         .launch("127.0.0.1:7860")
 }
-"#,
-        "vision" => r#"use grio::*;
+"#
+        }
+        "vision" => {
+            r#"use grio::*;
 
 fn main() -> grio::Result<()> {
     App::new("Vision Model Demo")
@@ -136,8 +145,10 @@ fn main() -> grio::Result<()> {
         })
         .launch("127.0.0.1:7860")
 }
-"#,
-        _ => r#"use grio::*;
+"#
+        }
+        _ => {
+            r#"use grio::*;
 
 fn main() -> grio::Result<()> {
     App::new("My grio App")
@@ -152,7 +163,8 @@ fn main() -> grio::Result<()> {
         })
         .launch("127.0.0.1:7860")
 }
-"#,
+"#
+        }
     };
 
     fs::write(path.join("Cargo.toml"), cargo_toml).expect("failed to write Cargo.toml");

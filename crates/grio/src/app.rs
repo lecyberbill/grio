@@ -13,20 +13,15 @@ use crate::events::{EventName, WireEvent};
 use crate::{Error, Result};
 
 /// Mode d'affichage du thème (sombre, clair ou détection système).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum ThemeMode {
     /// Mode sombre forcé.
     Dark,
     /// Mode clair forcé.
     Light,
     /// Détection automatique selon les préférences de l'OS/navigateur.
+    #[default]
     System,
-}
-
-impl Default for ThemeMode {
-    fn default() -> Self {
-        Self::System
-    }
 }
 
 /// Personnalisation de l'apparence visuelle (Thème).
@@ -59,15 +54,24 @@ impl Default for Theme {
 impl Theme {
     /// Thème sombre moderne par défaut.
     pub fn dark() -> Self {
-        Self { mode: ThemeMode::Dark, ..Default::default() }
+        Self {
+            mode: ThemeMode::Dark,
+            ..Default::default()
+        }
     }
     /// Thème clair moderne par défaut.
     pub fn light() -> Self {
-        Self { mode: ThemeMode::Light, ..Default::default() }
+        Self {
+            mode: ThemeMode::Light,
+            ..Default::default()
+        }
     }
     /// Thème adaptatif calqué sur l'OS/navigateur.
     pub fn system() -> Self {
-        Self { mode: ThemeMode::System, ..Default::default() }
+        Self {
+            mode: ThemeMode::System,
+            ..Default::default()
+        }
     }
     /// Définit la couleur d'accentuation (ex: "#6366f1", "#10b981").
     pub fn primary(mut self, p: impl Into<String>) -> Self {
@@ -180,7 +184,11 @@ pub struct RowBuilder {
 
 impl Default for RowBuilder {
     fn default() -> Self {
-        Self { children: Vec::new(), gap: 16.0, layout: Layout::default() }
+        Self {
+            children: Vec::new(),
+            gap: 16.0,
+            layout: Layout::default(),
+        }
     }
 }
 
@@ -205,7 +213,8 @@ impl RowBuilder {
         if b.layout == Layout::default() {
             self.children.push(Box::new(r));
         } else {
-            self.children.push(Box::new(WithLayout::new(r).set_layout(b.layout)));
+            self.children
+                .push(Box::new(WithLayout::new(r).set_layout(b.layout)));
         }
     }
     /// Ajoute une sous-colonne au groupe.
@@ -219,21 +228,25 @@ impl RowBuilder {
         if b.layout == Layout::default() {
             self.children.push(Box::new(col));
         } else {
-            self.children.push(Box::new(WithLayout::new(col).set_layout(b.layout)));
+            self.children
+                .push(Box::new(WithLayout::new(col).set_layout(b.layout)));
         }
     }
     /// Ajoute une sous-grille au groupe.
     pub fn grid(&mut self, columns: usize, task: impl FnOnce(&mut RowBuilder)) {
         let mut b = RowBuilder::default();
         task(&mut b);
-        let mut g = Grid::new(format!("grid-{}", self.children.len())).columns(columns).gap(b.gap);
+        let mut g = Grid::new(format!("grid-{}", self.children.len()))
+            .columns(columns)
+            .gap(b.gap);
         for c in b.children {
             g.children.push(c);
         }
         if b.layout == Layout::default() {
             self.children.push(Box::new(g));
         } else {
-            self.children.push(Box::new(WithLayout::new(g).set_layout(b.layout)));
+            self.children
+                .push(Box::new(WithLayout::new(g).set_layout(b.layout)));
         }
     }
     /// Ajoute un panneau au groupe.
@@ -241,14 +254,17 @@ impl RowBuilder {
         let label = label.into();
         let mut b = RowBuilder::default();
         task(&mut b);
-        let mut p = Panel::new(format!("panel-{}", label)).label(label).gap(b.gap);
+        let mut p = Panel::new(format!("panel-{}", label))
+            .label(label)
+            .gap(b.gap);
         for c in b.children {
             p.children.push(c);
         }
         if b.layout == Layout::default() {
             self.children.push(Box::new(p));
         } else {
-            self.children.push(Box::new(WithLayout::new(p).set_layout(b.layout)));
+            self.children
+                .push(Box::new(WithLayout::new(p).set_layout(b.layout)));
         }
     }
     /// Espace entre les composants du groupe, en pixels.
@@ -256,17 +272,29 @@ impl RowBuilder {
         self.gap = g;
     }
     /// Largeur du groupe, en pixels.
-    pub fn width(&mut self, w: u32) { self.layout.width = Some(w); }
+    pub fn width(&mut self, w: u32) {
+        self.layout.width = Some(w);
+    }
     /// Hauteur du groupe, en pixels.
-    pub fn height(&mut self, h: u32) { self.layout.height = Some(h); }
+    pub fn height(&mut self, h: u32) {
+        self.layout.height = Some(h);
+    }
     /// Largeur maximale du groupe, en pixels.
-    pub fn max_width(&mut self, mw: u32) { self.layout.max_width = Some(mw); }
+    pub fn max_width(&mut self, mw: u32) {
+        self.layout.max_width = Some(mw);
+    }
     /// Hauteur maximale du groupe, en pixels.
-    pub fn max_height(&mut self, mh: u32) { self.layout.max_height = Some(mh); }
+    pub fn max_height(&mut self, mh: u32) {
+        self.layout.max_height = Some(mh);
+    }
     /// Proportion du groupe dans la colonne/racine (comme `scale` de Gradio).
-    pub fn scale(&mut self, s: u32) { self.layout.scale = Some(s); }
+    pub fn scale(&mut self, s: u32) {
+        self.layout.scale = Some(s);
+    }
     /// Largeur minimale du groupe, en pixels.
-    pub fn min_width(&mut self, w: u32) { self.layout.min_width = Some(w); }
+    pub fn min_width(&mut self, w: u32) {
+        self.layout.min_width = Some(w);
+    }
 }
 
 impl App {
@@ -358,7 +386,8 @@ impl App {
         self
     }
 
-    /// Ajoute un composant directement à la racine (colonne).
+    /// Ajoute un composant à la racine de l'application.
+    #[allow(clippy::should_implement_trait)]
     pub fn add(mut self, c: impl IntoBox) -> Self {
         self.root.push(c.into_box());
         self
@@ -408,7 +437,9 @@ impl App {
     pub fn grid(mut self, columns: usize, task: impl FnOnce(&mut RowBuilder)) -> Self {
         let mut b = RowBuilder::default();
         task(&mut b);
-        let mut g = Grid::new(format!("grid-{}", b.children.len())).columns(columns).gap(b.gap);
+        let mut g = Grid::new(format!("grid-{}", b.children.len()))
+            .columns(columns)
+            .gap(b.gap);
         for c in b.children {
             g.children.push(c);
         }
@@ -426,7 +457,9 @@ impl App {
         let label = label.into();
         let mut b = RowBuilder::default();
         task(&mut b);
-        let mut p = Panel::new(format!("panel-{}", label)).label(label).gap(b.gap);
+        let mut p = Panel::new(format!("panel-{}", label))
+            .label(label)
+            .gap(b.gap);
         for c in b.children {
             p.children.push(c);
         }
@@ -441,7 +474,10 @@ impl App {
 
     /// Handler de soumission : exécuté à chaque clic sur Run (ou appel
     /// `/api/predict`). Ajoute automatiquement le bouton Run à l'UI.
-    pub fn on_submit(mut self, f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static) -> Self {
+    pub fn on_submit(
+        mut self,
+        f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
         self.handlers.push(HandlerDef {
             event: EventName::Submit,
             component: None,
@@ -457,7 +493,10 @@ impl App {
     }
 
     /// Handler exécuté au **montage de la page** (connexion WebSocket du client).
-    pub fn on_load(mut self, f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static) -> Self {
+    pub fn on_load(
+        mut self,
+        f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
         self.handlers.push(HandlerDef {
             event: EventName::Load,
             component: None,
@@ -470,7 +509,11 @@ impl App {
     }
 
     /// Handler exécuté quand un composant d'entrée (`id`) est modifié.
-    pub fn on_change(mut self, id: impl Into<String>, f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static) -> Self {
+    pub fn on_change(
+        mut self,
+        id: impl Into<String>,
+        f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
         self.handlers.push(HandlerDef {
             event: EventName::Change,
             component: Some(id.into()),
@@ -483,7 +526,11 @@ impl App {
     }
 
     /// Handler exécuté quand un composant (`id`) reçoit un clic.
-    pub fn on_click(mut self, id: impl Into<String>, f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static) -> Self {
+    pub fn on_click(
+        mut self,
+        id: impl Into<String>,
+        f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
         self.handlers.push(HandlerDef {
             event: EventName::Click,
             component: Some(id.into()),
@@ -498,7 +545,12 @@ impl App {
     /// Lie la **même fonction** à plusieurs identifiants pour un événement
     /// `"click"`, `"change"`, `"play"`, `"pause"`, `"stop"` ou `"stream"`
     /// (multi-déclencheurs, type `gr.on`).
-    pub fn on(mut self, event: &str, ids: impl IntoIterator<Item = impl Into<String>>, f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static) -> Self {
+    pub fn on(
+        mut self,
+        event: &str,
+        ids: impl IntoIterator<Item = impl Into<String>>,
+        f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
         let ev = match event {
             "click" => EventName::Click,
             "change" => EventName::Change,
@@ -523,28 +575,49 @@ impl App {
     }
 
     /// Handler exécuté quand la lecture démarre sur un média (`id`).
-    pub fn on_play(self, id: impl Into<String>, f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static) -> Self {
+    pub fn on_play(
+        self,
+        id: impl Into<String>,
+        f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
         self.register(EventName::Play, Some(id.into()), f)
     }
 
     /// Handler exécuté quand un média (`id`) est mis en pause.
-    pub fn on_pause(self, id: impl Into<String>, f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static) -> Self {
+    pub fn on_pause(
+        self,
+        id: impl Into<String>,
+        f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
         self.register(EventName::Pause, Some(id.into()), f)
     }
 
     /// Handler exécuté quand la lecture d'un média (`id`) est arrêtée.
-    pub fn on_stop(self, id: impl Into<String>, f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static) -> Self {
+    pub fn on_stop(
+        self,
+        id: impl Into<String>,
+        f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
         self.register(EventName::Stop, Some(id.into()), f)
     }
 
     /// Handler exécuté à chaque fragment reçu d'un **flux streaming**
     /// (`Audio::live`/`Video::live`) pour le composant `id`. Lis le total via
     /// `ctx.get::<StreamInfo>(id)`.
-    pub fn on_stream(self, id: impl Into<String>, f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static) -> Self {
+    pub fn on_stream(
+        self,
+        id: impl Into<String>,
+        f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
         self.register(EventName::Stream, Some(id.into()), f)
     }
 
-    fn register(mut self, event: EventName, component: Option<String>, f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static) -> Self {
+    fn register(
+        mut self,
+        event: EventName,
+        component: Option<String>,
+        f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
         self.handlers.push(HandlerDef {
             event,
             component,
@@ -557,7 +630,11 @@ impl App {
     }
 
     /// Listener d'événement applicatif (déclenché par `ctx.emit(nom, …)`).
-    pub fn on_event(mut self, name: impl Into<String>, f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static) -> Self {
+    pub fn on_event(
+        mut self,
+        name: impl Into<String>,
+        f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
         self.handlers.push(HandlerDef {
             event: EventName::Custom(name.into()),
             component: None,
@@ -587,7 +664,10 @@ impl App {
     }
 
     /// Exécute `f` après le dernier handler, seulement s'il a réussi.
-    pub fn success(mut self, f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static) -> Self {
+    pub fn success(
+        mut self,
+        f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
         self.chain_link(RunCond::Success, f);
         self
     }
@@ -595,12 +675,19 @@ impl App {
     /// Exécute `f` après le dernier handler, seulement s'il a échoué.
     /// S'il réussit, l'erreur est considérée gérée (les maillons suivants
     /// redeviennent des `success`).
-    pub fn failure(mut self, f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static) -> Self {
+    pub fn failure(
+        mut self,
+        f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
         self.chain_link(RunCond::Failure, f);
         self
     }
 
-    fn chain_link(&mut self, on: RunCond, f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static) {
+    fn chain_link(
+        &mut self,
+        on: RunCond,
+        f: impl Fn(&mut Context) -> Result<()> + Send + Sync + 'static,
+    ) {
         if let Some(h) = self.handlers.last_mut() {
             h.chain.push(Sibling { on, f: Arc::new(f) });
         }
@@ -617,11 +704,15 @@ impl App {
         if tokio::runtime::Handle::try_current().is_ok() {
             // Si un runtime existe déjà, on utilise block_in_place ou on délègue
             tokio::task::block_in_place(|| {
-                let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()?;
                 rt.block_on(async move { crate::server::serve(self, addr.into()).await })
             })
         } else {
-            let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?;
             rt.block_on(async move { crate::server::serve(self, addr.into()).await })
         }
     }
@@ -676,8 +767,10 @@ pub(crate) fn process_event(ev: &WireEvent, app: &App, ctx: &mut Context) -> Val
     }
 
     let all = ctx.take_all();
-    let u: Vec<Value> =
-        all.into_iter().map(|(id, patch)| json!({ "id": id, "p": patch })).collect();
+    let u: Vec<Value> = all
+        .into_iter()
+        .map(|(id, patch)| json!({ "id": id, "p": patch }))
+        .collect();
     json!({ "t": "update", "u": u })
 }
 

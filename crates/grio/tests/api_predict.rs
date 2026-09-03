@@ -41,19 +41,39 @@ async fn test_api_schema_and_predict_flow() {
     assert!(docs.contains("swagger-ui"));
 
     // 4. Test POST /api/predict sans clé (doit échouer 401)
-    let unauth = http_post(&format!("http://127.0.0.1:{port}/api/predict"), r#"{"data":["Ada",4]}"#, None).await;
+    let unauth = http_post(
+        &format!("http://127.0.0.1:{port}/api/predict"),
+        r#"{"data":["Ada",4]}"#,
+        None,
+    )
+    .await;
     assert!(unauth.contains("401 Unauthorized") || unauth.contains("Invalid or missing API key"));
 
     // 5. Test POST /api/predict avec clé (doit réussir 200)
-    let auth_ok = http_post(&format!("http://127.0.0.1:{port}/api/predict"), r#"{"data":["Ada",4]}"#, Some("secret123")).await;
+    let auth_ok = http_post(
+        &format!("http://127.0.0.1:{port}/api/predict"),
+        r#"{"data":["Ada",4]}"#,
+        Some("secret123"),
+    )
+    .await;
     assert!(auth_ok.contains("Ada x4"));
 }
 
 #[tokio::test]
 async fn test_lot1_controls_api_predict() {
     let app = App::new("Test Lot 1")
-        .item(Radio::new("arch").choices(&["mamba", "transformer"]).value("mamba"))
-        .item(SliderRange::new("range").min(0.0).max(100.0).value(10.0, 90.0).unit("%"))
+        .item(
+            Radio::new("arch")
+                .choices(&["mamba", "transformer"])
+                .value("mamba"),
+        )
+        .item(
+            SliderRange::new("range")
+                .min(0.0)
+                .max(100.0)
+                .value(10.0, 90.0)
+                .unit("%"),
+        )
         .item(ColorPicker::new("color").value("#10b981"))
         .item(Output::new("out"))
         .item(Output::new("event_echo"))
@@ -76,7 +96,10 @@ async fn test_lot1_controls_api_predict() {
             let arch: String = ctx.get("arch")?;
             let range: (f64, f64) = ctx.get("range")?;
             let color: String = ctx.get("color")?;
-            ctx.set("out", format!("{arch} [{:.0}-{:.0}] {color}", range.0, range.1));
+            ctx.set(
+                "out",
+                format!("{arch} [{:.0}-{:.0}] {color}", range.0, range.1),
+            );
             Ok(())
         });
 
@@ -92,9 +115,18 @@ async fn test_lot1_controls_api_predict() {
 
     // 1. Validation du rendu HTML servi (data-kind radio, sliderrange, colorpicker)
     let index_html = http_get(&format!("http://127.0.0.1:{port}/")).await;
-    assert!(index_html.contains(r#"data-kind="radio""#), "Radio widget must be in HTML");
-    assert!(index_html.contains(r#"data-kind="sliderrange""#), "SliderRange widget must be in HTML");
-    assert!(index_html.contains(r#"data-kind="colorpicker""#), "ColorPicker widget must be in HTML");
+    assert!(
+        index_html.contains(r#"data-kind="radio""#),
+        "Radio widget must be in HTML"
+    );
+    assert!(
+        index_html.contains(r#"data-kind="sliderrange""#),
+        "SliderRange widget must be in HTML"
+    );
+    assert!(
+        index_html.contains(r#"data-kind="colorpicker""#),
+        "ColorPicker widget must be in HTML"
+    );
 
     // 2. Validation du schéma d'API OpenAPI
     let openapi = http_get(&format!("http://127.0.0.1:{port}/api/openapi.json")).await;
@@ -109,7 +141,10 @@ async fn test_lot1_controls_api_predict() {
         None,
     )
     .await;
-    assert!(resp.contains("transformer [20-80] #ef4444"), "Prediction response must match payload: {resp}");
+    assert!(
+        resp.contains("transformer [20-80] #ef4444"),
+        "Prediction response must match payload: {resp}"
+    );
 }
 
 #[tokio::test]
@@ -128,32 +163,92 @@ async fn test_showcase_boot_and_components() {
     // 1. Validation de la page d'accueil du showcase
     let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
     assert!(html.contains("Showcase · grio"), "Title must be present");
-    assert!(html.contains(r#"data-kind="chatbot""#), "Chatbot must be mounted");
-    assert!(html.contains(r#"data-kind="dataframe""#), "Dataframe must be mounted");
-    assert!(html.contains(r#"data-kind="metric""#), "Metric must be mounted");
-    assert!(html.contains(r#"data-kind="imageeditor""#), "ImageEditor must be mounted");
-    assert!(html.contains(r#"data-kind="sliderrange""#), "SliderRange must be mounted");
-    assert!(html.contains(r#"data-kind="colorpicker""#), "ColorPicker must be mounted");
-    assert!(html.contains(r#"data-kind="radio""#), "Radio must be mounted");
+    assert!(
+        html.contains(r#"data-kind="chatbot""#),
+        "Chatbot must be mounted"
+    );
+    assert!(
+        html.contains(r#"data-kind="dataframe""#),
+        "Dataframe must be mounted"
+    );
+    assert!(
+        html.contains(r#"data-kind="metric""#),
+        "Metric must be mounted"
+    );
+    assert!(
+        html.contains(r#"data-kind="imageeditor""#),
+        "ImageEditor must be mounted"
+    );
+    assert!(
+        html.contains(r#"data-kind="sliderrange""#),
+        "SliderRange must be mounted"
+    );
+    assert!(
+        html.contains(r#"data-kind="colorpicker""#),
+        "ColorPicker must be mounted"
+    );
+    assert!(
+        html.contains(r#"data-kind="radio""#),
+        "Radio must be mounted"
+    );
     assert!(html.contains(r#"data-kind="plot""#), "Plot must be mounted");
-    assert!(html.contains(r#"data-kind="annotatedimage""#), "AnnotatedImage must be mounted");
-    assert!(html.contains(r#"data-kind="imagecomparison""#), "ImageComparison must be mounted");
-    assert!(html.contains(r#"data-kind="audiorecorder""#), "AudioRecorder must be mounted");
-    assert!(html.contains(r#"data-kind="list""#), "SortableList (kind 'list') must be mounted");
-    assert!(html.contains(r#"data-kind="explorer""#), "Explorer must be mounted");
+    assert!(
+        html.contains(r#"data-kind="annotatedimage""#),
+        "AnnotatedImage must be mounted"
+    );
+    assert!(
+        html.contains(r#"data-kind="imagecomparison""#),
+        "ImageComparison must be mounted"
+    );
+    assert!(
+        html.contains(r#"data-kind="audiorecorder""#),
+        "AudioRecorder must be mounted"
+    );
+    assert!(
+        html.contains(r#"data-kind="list""#),
+        "SortableList (kind 'list') must be mounted"
+    );
+    assert!(
+        html.contains(r#"data-kind="explorer""#),
+        "Explorer must be mounted"
+    );
     assert!(html.contains(r#"data-kind="file""#), "File must be mounted");
-    assert!(html.contains(r#"data-kind="accordion""#), "Accordion must be mounted");
-    assert!(html.contains(r#"data-kind="progress""#), "Progress must be mounted");
-    assert!(html.contains(r#"data-kind="highlightedtext""#), "HighlightedText must be mounted");
-    assert!(html.contains(r#"data-kind="codediff""#), "CodeDiff must be mounted");
-    assert!(html.contains(r#"data-kind="model3d""#), "Model3D must be mounted");
+    assert!(
+        html.contains(r#"data-kind="accordion""#),
+        "Accordion must be mounted"
+    );
+    assert!(
+        html.contains(r#"data-kind="progress""#),
+        "Progress must be mounted"
+    );
+    assert!(
+        html.contains(r#"data-kind="highlightedtext""#),
+        "HighlightedText must be mounted"
+    );
+    assert!(
+        html.contains(r#"data-kind="codediff""#),
+        "CodeDiff must be mounted"
+    );
+    assert!(
+        html.contains(r#"data-kind="model3d""#),
+        "Model3D must be mounted"
+    );
     assert!(html.contains(r#"data-kind="html""#), "Html must be mounted");
 
     // 2. Validation de la spécification OpenAPI
     let openapi = http_get(&format!("http://127.0.0.1:{port}/api/openapi.json")).await;
-    assert!(openapi.contains("sc_text"), "OpenAPI must include showcase inputs");
-    assert!(openapi.contains("sc_slider"), "OpenAPI must include sc_slider");
-    assert!(openapi.contains("sc_color"), "OpenAPI must include sc_color");
+    assert!(
+        openapi.contains("sc_text"),
+        "OpenAPI must include showcase inputs"
+    );
+    assert!(
+        openapi.contains("sc_slider"),
+        "OpenAPI must include sc_slider"
+    );
+    assert!(
+        openapi.contains("sc_color"),
+        "OpenAPI must include sc_color"
+    );
 
     // 3. Validation de prédiction /api/predict sur le showcase
     let resp = http_post(
@@ -162,9 +257,18 @@ async fn test_showcase_boot_and_components() {
         None,
     )
     .await;
-    assert!(resp.contains("SHOWCASE SUBMISSION RESULT"), "Submit handler must process inputs: {resp}");
-    assert!(resp.contains("My AI Test"), "Result must contain submitted text");
-    assert!(resp.contains("SortableList order"), "Result must contain SortableList snapshot");
+    assert!(
+        resp.contains("SHOWCASE SUBMISSION RESULT"),
+        "Submit handler must process inputs: {resp}"
+    );
+    assert!(
+        resp.contains("My AI Test"),
+        "Result must contain submitted text"
+    );
+    assert!(
+        resp.contains("SortableList order"),
+        "Result must contain SortableList snapshot"
+    );
 }
 
 #[tokio::test]
@@ -197,9 +301,18 @@ async fn test_lot2_vision_and_audio_integration() {
 
     // 1. DOM validation
     let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
-    assert!(html.contains(r#"data-kind="annotatedimage""#), "AnnotatedImage in DOM");
-    assert!(html.contains(r#"data-kind="imagecomparison""#), "ImageComparison in DOM");
-    assert!(html.contains(r#"data-kind="audiorecorder""#), "AudioRecorder in DOM");
+    assert!(
+        html.contains(r#"data-kind="annotatedimage""#),
+        "AnnotatedImage in DOM"
+    );
+    assert!(
+        html.contains(r#"data-kind="imagecomparison""#),
+        "ImageComparison in DOM"
+    );
+    assert!(
+        html.contains(r#"data-kind="audiorecorder""#),
+        "AudioRecorder in DOM"
+    );
     assert!(html.contains("dog"), "Class label present in initial props");
 
     // 2. Predict validation
@@ -209,14 +322,22 @@ async fn test_lot2_vision_and_audio_integration() {
         None,
     )
     .await;
-    assert!(resp.contains("recorded_audio_len_47"), "Prediction should reflect audio input: {resp}");
+    assert!(
+        resp.contains("recorded_audio_len_47"),
+        "Prediction should reflect audio input: {resp}"
+    );
 }
 
 #[tokio::test]
 async fn test_progress_variants_bar_circle_pie() {
     let app = App::new("Test Progress Variants")
         .item(Progress::new("p_bar").label("Download Bar").bar())
-        .item(Progress::new("p_circle").label("Epoch Circle").circle().size(96))
+        .item(
+            Progress::new("p_circle")
+                .label("Epoch Circle")
+                .circle()
+                .size(96),
+        )
         .item(Progress::new("p_pie").label("Quota Pie").pie().size(80))
         .item(Output::new("out"))
         .on_submit(|ctx| {
@@ -254,21 +375,25 @@ async fn test_progress_variants_bar_circle_pie() {
         None,
     )
     .await;
-    assert!(resp.contains("progress_updated"), "Predict output must be received: {resp}");
+    assert!(
+        resp.contains("progress_updated"),
+        "Predict output must be received: {resp}"
+    );
 }
 
 #[tokio::test]
 async fn test_lot4_specialized_components_integration() {
     let app = App::new("Test Lot 4 Specialized")
-        .item(HighlightedText::new("ht")
-            .segments(&[
-                ("Mistral ", Some("MODEL")),
-                ("est hébergé en ", None),
-                ("Europe", Some("LOC")),
-            ]))
-        .item(CodeDiff::new("diff")
-            .old_code("let a = 1;")
-            .new_code("let a = 2; // updated"))
+        .item(HighlightedText::new("ht").segments(&[
+            ("Mistral ", Some("MODEL")),
+            ("est hébergé en ", None),
+            ("Europe", Some("LOC")),
+        ]))
+        .item(
+            CodeDiff::new("diff")
+                .old_code("let a = 1;")
+                .new_code("let a = 2; // updated"),
+        )
         .item(Model3D::new("mesh").value("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3"))
         .item(Output::new("out"))
         .on_submit(|ctx| {
@@ -288,7 +413,10 @@ async fn test_lot4_specialized_components_integration() {
 
     // 1. DOM validation
     let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
-    assert!(html.contains(r#"data-kind="highlightedtext""#), "HighlightedText mounted");
+    assert!(
+        html.contains(r#"data-kind="highlightedtext""#),
+        "HighlightedText mounted"
+    );
     assert!(html.contains(r#"data-kind="codediff""#), "CodeDiff mounted");
     assert!(html.contains(r#"data-kind="model3d""#), "Model3D mounted");
     assert!(html.contains("MODEL"), "Tag MODEL present in DOM");
@@ -301,7 +429,10 @@ async fn test_lot4_specialized_components_integration() {
         None,
     )
     .await;
-    assert!(resp.contains("lot4_verified"), "Prediction output should be received: {resp}");
+    assert!(
+        resp.contains("lot4_verified"),
+        "Prediction output should be received: {resp}"
+    );
 }
 
 #[tokio::test]
@@ -338,9 +469,18 @@ async fn test_html_custom_component_robustness() {
 
     // 1. Validation du montage DOM du composant HTML
     let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
-    assert!(html.contains(r#"data-kind="html""#), "Html component mounted in DOM");
-    assert!(html.contains("custom-card"), "Custom card class present in DOM");
-    assert!(html.contains("data-grio-action"), "Event delegation attribute present in DOM");
+    assert!(
+        html.contains(r#"data-kind="html""#),
+        "Html component mounted in DOM"
+    );
+    assert!(
+        html.contains("custom-card"),
+        "Custom card class present in DOM"
+    );
+    assert!(
+        html.contains("data-grio-action"),
+        "Event delegation attribute present in DOM"
+    );
 
     // 2. Validation d'appel predict simulant une interaction
     let resp = http_post(
@@ -355,14 +495,16 @@ async fn test_html_custom_component_robustness() {
 #[tokio::test]
 async fn test_map_openstreetmap_component() {
     let app = App::new("Test Map OpenStreetMap")
-        .item(Map::new("geo_map")
-            .label("Fleet Map")
-            .center(48.8566, 2.3522)
-            .zoom(14)
-            .marker(48.8584, 2.2945, "Eiffel Tower", Some("#6366f1"))
-            .marker(48.8606, 2.3376, "Louvre", Some("#10b981"))
-            .circle(48.8566, 2.3522, 1000.0, Some("#f59e0b"))
-            .height(380))
+        .item(
+            Map::new("geo_map")
+                .label("Fleet Map")
+                .center(48.8566, 2.3522)
+                .zoom(14)
+                .marker(48.8584, 2.2945, "Eiffel Tower", Some("#6366f1"))
+                .marker(48.8606, 2.3376, "Louvre", Some("#10b981"))
+                .circle(48.8566, 2.3522, 1000.0, Some("#f59e0b"))
+                .height(380),
+        )
         .item(Output::new("out"))
         .on_click("geo_map", |ctx| {
             ctx.set("out", "map_clicked_ok");
@@ -382,7 +524,10 @@ async fn test_map_openstreetmap_component() {
     let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
     assert!(html.contains(r#"data-kind="map""#), "Map in DOM");
     assert!(html.contains("Fleet Map"), "Map label in DOM");
-    assert!(html.contains("Eiffel Tower"), "Marker label embedded in props");
+    assert!(
+        html.contains("Eiffel Tower"),
+        "Marker label embedded in props"
+    );
     assert!(html.contains("Louvre"), "Second marker label embedded");
     assert!(html.contains("1000"), "Circle radius in props");
 }

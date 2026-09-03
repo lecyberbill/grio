@@ -52,7 +52,7 @@ fn main() -> grio::Result<()> {
             if prompt.trim().is_empty() { return Ok(()); }
             let mut hist: Vec<ChatMessage> = ctx.get("chat").unwrap_or_default();
             hist.push(ChatMessage::user(&prompt));
-            hist.push(ChatMessage::assistant(format!("Here is why Rust is great for AI:\n- **Zero-cost abstractions** & native execution speed.\n- **Memory safety without garbage collection** (predictable latencies for streaming tokens).\n- **High concurrency** with Tokio & Rayon for tensor workloads.")));
+            hist.push(ChatMessage::assistant("Here is why Rust is great for AI:\n- **Zero-cost abstractions** & native execution speed.\n- **Memory safety without garbage collection** (predictable latencies for streaming tokens).\n- **High concurrency** with Tokio & Rayon for tensor workloads."));
             ctx.set("chat", hist);
             ctx.set("prompt", "");
             ctx.alert(AlertLevel::Success, "Answer generated!");

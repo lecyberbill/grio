@@ -126,7 +126,10 @@ impl Context {
         if self.flow_in.as_ref().is_some_and(|s| !s.contains(id)) {
             return Err(Error::from(format!("input `{id}` hors du flux déclaré")));
         }
-        let v = self.inputs.get(id).ok_or_else(|| Error::from(format!("unknown input `{id}`")))?;
+        let v = self
+            .inputs
+            .get(id)
+            .ok_or_else(|| Error::from(format!("unknown input `{id}`")))?;
         Ok(serde_json::from_value(v.clone())?)
     }
 
@@ -216,7 +219,10 @@ impl Context {
     /// Émet un événement applicatif local, distribué aux listeners
     /// `App::on_event(nom)`. Une garde anti-boucle limite la profondeur.
     pub fn emit<T: Serialize>(&mut self, name: impl Into<String>, data: T) {
-        self.emitted.push((name.into(), serde_json::to_value(data).unwrap_or(Value::Null)));
+        self.emitted.push((
+            name.into(),
+            serde_json::to_value(data).unwrap_or(Value::Null),
+        ));
     }
 
     fn push_update(&mut self, id: String, patch: Value) {
@@ -228,8 +234,7 @@ impl Context {
     /// Garde commune aux écritures : hors flux déclaré (`flow_out`) ou marqué
     /// `skip` → la mise à jour est ignorée silencieusement.
     fn blocked_writes(&self, id: &str) -> bool {
-        self.skipped.contains(id)
-            || self.flow_out.as_ref().is_some_and(|s| !s.contains(id))
+        self.skipped.contains(id) || self.flow_out.as_ref().is_some_and(|s| !s.contains(id))
     }
 
     fn send(&self, msg: Value) {

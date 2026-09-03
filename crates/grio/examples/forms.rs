@@ -261,8 +261,12 @@ fn main() -> grio::Result<()> {
 fn chart(k: f64, variant: &str) -> serde_json::Value {
     use serde_json::json;
     let labels: Vec<String> = (1..=8).map(|i| format!("S{i}")).collect();
-    let a: Vec<f64> = (0..8).map(|i| 10.0 + 8.0 * ((i as f64 + k) / 2.0).sin()).collect();
-    let b: Vec<f64> = (0..8).map(|i| 6.0 + 5.0 * ((i as f64 + 1.0 + k) / 2.0).cos()).collect();
+    let a: Vec<f64> = (0..8)
+        .map(|i| 10.0 + 8.0 * ((i as f64 + k) / 2.0).sin())
+        .collect();
+    let b: Vec<f64> = (0..8)
+        .map(|i| 6.0 + 5.0 * ((i as f64 + 1.0 + k) / 2.0).cos())
+        .collect();
     json!({
         "variant": variant,
         "labels": labels,

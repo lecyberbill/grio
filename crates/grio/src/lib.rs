@@ -39,11 +39,12 @@ pub mod showcase;
 pub use app::{App, Theme, ThemeMode};
 pub use components::{
     Accordion, AnnotatedImage, Audio, AudioRecorder, BoundingBox, Button, ChatMessage, Chatbot,
-    Checkbox, Code, CodeDiff, ColorPicker, Column, Component, Dataframe, DatePicker, DownloadButton,
-    Dropdown, Explorer, File, Gallery, Grid, HighlightedText, Html, Image, ImageComparison,
-    ImageEditor, IntoBox, Json, Label, Layout, Map, MapCircle, MapMarker, Markdown, Metric, Model3D, Number, Output,
-    Panel, Plot, Progress, Radio, Role, Row, SectionBuilder, Slider, SliderRange, SortableList,
-    Tabs, Text, TextSegment, TimePicker, Timer, Video, WithLayout,
+    Checkbox, Code, CodeDiff, ColorPicker, Column, Component, Dataframe, DatePicker,
+    DownloadButton, Dropdown, Explorer, File, Gallery, Grid, HighlightedText, Html, Image,
+    ImageComparison, ImageEditor, IntoBox, Json, Label, Layout, Map, MapCircle, MapMarker,
+    Markdown, Metric, Model3D, Number, Output, Panel, Plot, Progress, Radio, Role, Row,
+    SectionBuilder, Slider, SliderRange, SortableList, Tabs, Text, TextSegment, TimePicker, Timer,
+    Video, WithLayout,
 };
 pub use context::{AlertLevel, Context};
 pub use events::EventName;

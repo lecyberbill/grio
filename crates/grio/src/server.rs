@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Query, State, Json};
+use axum::extract::{Json, Query, State};
 use axum::http::header;
 use axum::response::{Html, IntoResponse};
 use axum::routing::{get, post};
@@ -32,6 +32,9 @@ use crate::Result;
 const STYLES: &str = include_str!("assets/styles.css");
 const APP_JS: &str = include_str!("assets/app.js");
 
+type SessionMap = HashMap<String, Value>;
+type SessionStore = HashMap<String, Arc<Mutex<SessionMap>>>;
+
 /// État partagé du serveur (application + valeurs courantes + bus temps réel).
 pub struct AppServer {
     /// Application déclarée par l'utilisateur.
@@ -39,7 +42,7 @@ pub struct AppServer {
     /// Dernier instantané des valeurs d'entrée globales (fallback).
     pub values: Arc<Mutex<HashMap<String, Value>>>,
     /// Sessions isolées des clients : session_id -> HashMap<id_composant, valeur>.
-    pub sessions: Arc<Mutex<HashMap<String, Arc<Mutex<HashMap<String, Value>>>>>>,
+    pub sessions: Arc<Mutex<SessionStore>>,
     /// Canal de poussée global / ciblé.
     push_tx: mpsc::UnboundedSender<(Option<String>, Value)>,
     /// Broadcast vers les clients connectés.
@@ -123,8 +126,16 @@ pub async fn serve(app: App, addr: String) -> Result<()> {
         eprintln!("  |  Auth ->  Cle API requise pour /api/predict");
     }
     eprintln!("  +----------------------------------------------");
-    eprintln!("  |  Entrees [{}] : {}", io.inputs.len(), io.inputs.join(", "));
-    eprintln!("  |  Sorties [{}] : {}", io.outputs.len(), io.outputs.join(", "));
+    eprintln!(
+        "  |  Entrees [{}] : {}",
+        io.inputs.len(),
+        io.inputs.join(", ")
+    );
+    eprintln!(
+        "  |  Sorties [{}] : {}",
+        io.outputs.len(),
+        io.outputs.join(", ")
+    );
     eprintln!("  |  Listeners  [{}]", server.app.handlers.len());
     for h in &server.app.handlers {
         let src = match (&h.event, &h.component) {
@@ -158,14 +169,26 @@ async fn cors_middleware(
         next.run(request).await
     };
     let headers = response.headers_mut();
-    headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, header::HeaderValue::from_static("*"));
-    headers.insert(header::ACCESS_CONTROL_ALLOW_METHODS, header::HeaderValue::from_static("GET, POST, OPTIONS"));
-    headers.insert(header::ACCESS_CONTROL_ALLOW_HEADERS, header::HeaderValue::from_static("Content-Type, Authorization, X-API-Key, X-Session-ID"));
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        header::HeaderValue::from_static("*"),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_METHODS,
+        header::HeaderValue::from_static("GET, POST, OPTIONS"),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_HEADERS,
+        header::HeaderValue::from_static("Content-Type, Authorization, X-API-Key, X-Session-ID"),
+    );
     response
 }
 
 /// Relayeur : pousse les messages temps réel vers le broadcast WebSocket.
-async fn forwarder(mut rx: mpsc::UnboundedReceiver<(Option<String>, Value)>, tx: broadcast::Sender<(Option<String>, String)>) {
+async fn forwarder(
+    mut rx: mpsc::UnboundedReceiver<(Option<String>, Value)>,
+    tx: broadcast::Sender<(Option<String>, String)>,
+) {
     while let Some((sess, v)) = rx.recv().await {
         let _ = tx.send((sess, v.to_string()));
     }
@@ -176,7 +199,12 @@ impl AppServer {
     /// Met un événement dans la file (ordre FIFO) et, si un **même**
     /// composant+événement est déjà en cours d'exécution, demande son
     /// annulation immédiate (drapeau `cancel` consultable via `ctx.cancelled`).
-    fn enqueue(&self, session_id: Option<String>, wire: WireEvent, finish: Option<oneshot::Sender<Value>>) {
+    fn enqueue(
+        &self,
+        session_id: Option<String>,
+        wire: WireEvent,
+        finish: Option<oneshot::Sender<Value>>,
+    ) {
         {
             let cur = self.current.lock().unwrap();
             if let Some((c, e, flag)) = cur.as_ref() {
@@ -185,12 +213,20 @@ impl AppServer {
                 }
             }
         }
-        let job = Job { session_id, wire, cancel: Arc::new(AtomicBool::new(false)), finish };
+        let job = Job {
+            session_id,
+            wire,
+            cancel: Arc::new(AtomicBool::new(false)),
+            finish,
+        };
         let _ = self.job_tx.send(job);
     }
 
     /// Récupère ou crée la table de valeurs pour une session donnée.
-    fn get_session_values(&self, session_id: &Option<String>) -> Arc<Mutex<HashMap<String, Value>>> {
+    fn get_session_values(
+        &self,
+        session_id: &Option<String>,
+    ) -> Arc<Mutex<HashMap<String, Value>>> {
         if !self.app.isolated_sessions {
             return Arc::clone(&self.values);
         }
@@ -269,7 +305,12 @@ fn run_event(
         inputs.insert(k.clone(), v.clone());
     }
 
-    let mut ctx = Context::new(Arc::new(inputs), Some(push.clone()), cancel, Some(wire.clone()));
+    let mut ctx = Context::new(
+        Arc::new(inputs),
+        Some(push.clone()),
+        cancel,
+        Some(wire.clone()),
+    );
     let out = process_event(wire, app, &mut ctx);
 
     // Fusionne les nouvelles valeurs dans l'état partagé.
@@ -302,7 +343,11 @@ fn short(v: &Value) -> String {
         other => other.to_string(),
     };
     let taken: String = s.chars().take(48).collect();
-    if taken.len() < s.len() { format!("{taken}…") } else { taken }
+    if taken.len() < s.len() {
+        format!("{taken}…")
+    } else {
+        taken
+    }
 }
 
 /// Résume une réponse serveur (updates / erreur) pour le log.
@@ -333,13 +378,20 @@ fn summarize(out: &Value) -> String {
 
 async fn index(State(server): State<Arc<AppServer>>) -> impl IntoResponse {
     let page = render_page(&server.app);
-    vlog(&server.app, "[http]", &format!("GET / 200 · {} octets", page.len()));
+    vlog(
+        &server.app,
+        "[http]",
+        &format!("GET / 200 · {} octets", page.len()),
+    );
     Html(page)
 }
 
 async fn js_asset(State(server): State<Arc<AppServer>>) -> impl IntoResponse {
     vlog(&server.app, "[http]", "GET /assets/app.js 200");
-    ([(header::CONTENT_TYPE, "text/javascript; charset=utf-8")], APP_JS)
+    (
+        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
+        APP_JS,
+    )
 }
 
 async fn css_asset(State(server): State<Arc<AppServer>>) -> impl IntoResponse {
@@ -357,12 +409,18 @@ async fn openapi_spec(State(server): State<Arc<AppServer>>) -> impl IntoResponse
 
     let mut input_props = serde_json::Map::new();
     for id in &io.inputs {
-        input_props.insert(id.clone(), json!({ "type": "string", "description": format!("Input component `{id}`") }));
+        input_props.insert(
+            id.clone(),
+            json!({ "type": "string", "description": format!("Input component `{id}`") }),
+        );
     }
 
     let mut output_props = serde_json::Map::new();
     for id in &io.outputs {
-        output_props.insert(id.clone(), json!({ "type": "string", "description": format!("Output component `{id}`") }));
+        output_props.insert(
+            id.clone(),
+            json!({ "type": "string", "description": format!("Output component `{id}`") }),
+        );
     }
 
     let spec = json!({
@@ -437,7 +495,10 @@ async fn openapi_spec(State(server): State<Arc<AppServer>>) -> impl IntoResponse
         }
     });
 
-    ([(header::CONTENT_TYPE, "application/json; charset=utf-8")], Json(spec))
+    (
+        [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
+        Json(spec),
+    )
 }
 
 /// `GET /docs` — Documentation Swagger UI légère.
@@ -487,12 +548,16 @@ async fn schema(State(server): State<Arc<AppServer>>) -> Json<Value> {
         .map(|c| { let c = *c; json!({ "id": c.id(), "kind": c.kind(), "role": role_str(c.role()), "props": merge_props(c) }) })
         .collect();
 
-    vlog(&server.app, "[api]", &format!(
-        "GET /api/schema · {} composants, {} entrées, {} sorties",
-        components.len(),
-        io.inputs.len(),
-        io.outputs.len()
-    ));
+    vlog(
+        &server.app,
+        "[api]",
+        &format!(
+            "GET /api/schema · {} composants, {} entrées, {} sorties",
+            components.len(),
+            io.inputs.len(),
+            io.outputs.len()
+        ),
+    );
 
     Json(json!({
         "app": {
@@ -531,10 +596,11 @@ async fn predict(
 ) -> impl IntoResponse {
     // Vérification de clé API si requise
     if let Some(ref required_key) = server.app.api_key {
-        let auth_header = headers.get("X-API-Key")
+        let auth_header = headers
+            .get("X-API-Key")
             .or_else(|| headers.get("authorization"))
             .and_then(|v| v.to_str().ok());
-        
+
         let valid = match auth_header {
             Some(key) if key == required_key => true,
             Some(bearer) if bearer.starts_with("Bearer ") && &bearer[7..] == required_key => true,
@@ -542,11 +608,16 @@ async fn predict(
         };
 
         if !valid {
-            vlog(&server.app, "[api]", "accès refusé (clé API manquante ou invalide)");
+            vlog(
+                &server.app,
+                "[api]",
+                "accès refusé (clé API manquante ou invalide)",
+            );
             return (
                 axum::http::StatusCode::UNAUTHORIZED,
-                Json(json!({ "ok": false, "error": "Unauthorized — Invalid or missing API key" }))
-            ).into_response();
+                Json(json!({ "ok": false, "error": "Unauthorized — Invalid or missing API key" })),
+            )
+                .into_response();
         }
     }
 
@@ -570,7 +641,11 @@ async fn predict(
         }
     }
 
-    let run_id = server.app.run_button.clone().unwrap_or_else(|| "run".to_string());
+    let run_id = server
+        .app
+        .run_button
+        .clone()
+        .unwrap_or_else(|| "run".to_string());
     let wire = WireEvent {
         t: "event".to_string(),
         c: run_id,
@@ -585,15 +660,24 @@ async fn predict(
         if !wire.v.contains_key(id) {
             return (
                 axum::http::StatusCode::BAD_REQUEST,
-                Json(json!({ "ok": false, "error": json!({"missing_input": id}) }))
-            ).into_response();
+                Json(json!({ "ok": false, "error": json!({"missing_input": id}) })),
+            )
+                .into_response();
         }
     }
 
-    vlog(&server.app, "[api]", &format!(
-        "POST /api/predict · entrées {{{}}}",
-        wire.v.iter().map(|(k, v)| format!("{k}={}", short(v))).collect::<Vec<_>>().join(", ")
-    ));
+    vlog(
+        &server.app,
+        "[api]",
+        &format!(
+            "POST /api/predict · entrées {{{}}}",
+            wire.v
+                .iter()
+                .map(|(k, v)| format!("{k}={}", short(v)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    );
 
     let (fin_tx, fin_rx) = oneshot::channel();
     server.enqueue(None, wire, Some(fin_tx));
@@ -608,8 +692,9 @@ async fn predict(
         vlog(&server.app, "[api]", &format!("! {m}"));
         return (
             axum::http::StatusCode::BAD_REQUEST,
-            Json(json!({ "ok": false, "error": out.get("m").cloned().unwrap_or(Value::Null) }))
-        ).into_response();
+            Json(json!({ "ok": false, "error": out.get("m").cloned().unwrap_or(Value::Null) })),
+        )
+            .into_response();
     }
 
     let mut by_id: HashMap<String, Value> = HashMap::new();
@@ -635,8 +720,9 @@ async fn predict(
             "ok": true,
             "data": data,
             "outputs": Value::Object(by_id.into_iter().collect()),
-        }))
-    ).into_response()
+        })),
+    )
+        .into_response()
 }
 
 fn role_str(r: Role) -> &'static str {
@@ -678,14 +764,21 @@ struct IoParts {
     outputs: Vec<String>,
 }
 
-async fn ws_upgrade(ws: WebSocketUpgrade, State(server): State<Arc<AppServer>>) -> impl IntoResponse {
+async fn ws_upgrade(
+    ws: WebSocketUpgrade,
+    State(server): State<Arc<AppServer>>,
+) -> impl IntoResponse {
     ws.on_upgrade(move |socket| socket_loop(socket, server))
 }
 
 async fn socket_loop(socket: WebSocket, server: Arc<AppServer>) {
     let client_id = server.clients.fetch_add(1, Ordering::SeqCst) + 1;
     let session_id = format!("sess_{client_id}");
-    vlog(&server.app, "[ws]", &format!("client #{client_id} connecté (session: {session_id})"));
+    vlog(
+        &server.app,
+        "[ws]",
+        &format!("client #{client_id} connecté (session: {session_id})"),
+    );
 
     let (mut sink, mut stream) = socket.split();
     let rx = server.tx.subscribe();
@@ -713,7 +806,10 @@ async fn socket_loop(socket: WebSocket, server: Arc<AppServer>) {
             Message::Text(t) => {
                 let Ok(envelope) = serde_json::from_str::<Value>(t.as_str()) else {
                     vlog(&server.app, "[ws]", "message illisible (JSON invalide)");
-                    let _ = server.push_tx.send((Some(session_id.clone()), json!({ "t": "error", "m": "bad message" })));
+                    let _ = server.push_tx.send((
+                        Some(session_id.clone()),
+                        json!({ "t": "error", "m": "bad message" }),
+                    ));
                     continue;
                 };
                 if envelope.get("t").and_then(|v| v.as_str()) == Some("stream") {
@@ -724,9 +820,17 @@ async fn socket_loop(socket: WebSocket, server: Arc<AppServer>) {
                     Ok(wire) if wire.t == "event" => {
                         let data = wire.d.as_ref().map(short).unwrap_or_default();
                         if wire.e == "load" {
-                            vlog(&server.app, "[ws]", &format!("client #{client_id} · load (page)"));
+                            vlog(
+                                &server.app,
+                                "[ws]",
+                                &format!("client #{client_id} · load (page)"),
+                            );
                         } else {
-                            vlog(&server.app, "[ws]", &format!("client #{client_id} · {} = {}", wire.c, wire.e));
+                            vlog(
+                                &server.app,
+                                "[ws]",
+                                &format!("client #{client_id} · {} = {}", wire.c, wire.e),
+                            );
                         }
                         if !data.is_empty() {
                             vlog(&server.app, "[ws]", &format!("   donnée : {data}"));
@@ -736,12 +840,19 @@ async fn socket_loop(socket: WebSocket, server: Arc<AppServer>) {
                     Ok(_) => {}
                     Err(_) => {
                         vlog(&server.app, "[ws]", "message illisible (JSON invalide)");
-                        let _ = server.push_tx.send((Some(session_id.clone()), json!({ "t": "error", "m": "bad message" })));
+                        let _ = server.push_tx.send((
+                            Some(session_id.clone()),
+                            json!({ "t": "error", "m": "bad message" }),
+                        ));
                     }
                 }
             }
             Message::Close(_) => {
-                vlog(&server.app, "[ws]", &format!("client #{client_id} déconnecté"));
+                vlog(
+                    &server.app,
+                    "[ws]",
+                    &format!("client #{client_id} déconnecté"),
+                );
                 break;
             }
             _ => {}
@@ -776,7 +887,9 @@ fn handle_stream(server: &AppServer, envelope: &Value) {
         return;
     }
 
-    let bytes = media::decode(&wire.p.b64).map(|b| b.len() as u64).unwrap_or(0);
+    let bytes = media::decode(&wire.p.b64)
+        .map(|b| b.len() as u64)
+        .unwrap_or(0);
     let stats = {
         let mut vals = server.values.lock().unwrap();
         let entry = vals
@@ -788,18 +901,25 @@ fn handle_stream(server: &AppServer, envelope: &Value) {
         entry.clone()
     };
 
-    let _ = server.push_tx.send((None, json!({
-        "t": "update",
-        "u": [{ "id": wire.c, "p": { "stream": stats } }]
-    })));
+    let _ = server.push_tx.send((
+        None,
+        json!({
+            "t": "update",
+            "u": [{ "id": wire.c, "p": { "stream": stats } }]
+        }),
+    ));
 
-    server.enqueue(None, WireEvent {
-        t: "event".to_string(),
-        c: wire.c,
-        e: "stream".to_string(),
-        d: None,
-        v: HashMap::new(),
-    }, None);
+    server.enqueue(
+        None,
+        WireEvent {
+            t: "event".to_string(),
+            c: wire.c,
+            e: "stream".to_string(),
+            d: None,
+            v: HashMap::new(),
+        },
+        None,
+    );
 }
 
 fn render_page(app: &App) -> String {
@@ -823,10 +943,14 @@ fn render_page(app: &App) -> String {
 
     let mut theme_css_vars = Vec::new();
     if let Some(ref p) = app.theme.primary {
-        theme_css_vars.push(format!("--mg-primary: {p}; --mg-accent: {p}; --mg-accent-2: {p}; --mg-primary-hover: {p}ee;"));
+        theme_css_vars.push(format!(
+            "--mg-primary: {p}; --mg-accent: {p}; --mg-accent-2: {p}; --mg-primary-hover: {p}ee;"
+        ));
     }
     if let Some(ref r) = app.theme.radius {
-        theme_css_vars.push(format!("--mg-radius: {r}; --mg-radius-sm: calc({r} * 0.6); --mg-radius-lg: calc({r} * 1.5);"));
+        theme_css_vars.push(format!(
+            "--mg-radius: {r}; --mg-radius-sm: calc({r} * 0.6); --mg-radius-lg: calc({r} * 1.5);"
+        ));
     }
     if let Some(ref f) = app.theme.font {
         theme_css_vars.push(format!("--mg-font-family: {f}; --mg-font: {f};"));
@@ -1040,9 +1164,16 @@ fn render_component(c: &dyn Component, out: &mut String) {
             let _labels: Vec<String> = props_json
                 .get("labels")
                 .and_then(|l| l.as_array())
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
-            let selected = props_json.get("selected").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+            let selected = props_json
+                .get("selected")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as usize;
 
             out.push_str(&format!(
                 r#"<div class="mg-tabs" data-kind="tabs" data-id="{}" data-role="{role}" data-props='{}'>"#,
@@ -1052,7 +1183,9 @@ fn render_component(c: &dyn Component, out: &mut String) {
 
             for (i, ch) in c.children().into_iter().enumerate() {
                 let active = if i == selected { " mg-active" } else { "" };
-                out.push_str(&format!(r#"<div class="mg-tab-pane{active}" data-tab-index="{i}">"#));
+                out.push_str(&format!(
+                    r#"<div class="mg-tab-pane{active}" data-tab-index="{i}">"#
+                ));
                 render_component(ch, out);
                 out.push_str("</div>");
             }
@@ -1063,9 +1196,16 @@ fn render_component(c: &dyn Component, out: &mut String) {
             let labels: Vec<String> = props_json
                 .get("labels")
                 .and_then(|l| l.as_array())
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
-            let open_first = props_json.get("open").and_then(|v| v.as_bool()).unwrap_or(false);
+            let open_first = props_json
+                .get("open")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             for (i, ch) in c.children().into_iter().enumerate() {
                 let label = labels.get(i).map(String::as_str).unwrap_or("");
                 let open = if i == 0 && open_first { " open" } else { "" };
@@ -1094,7 +1234,9 @@ fn attrs(id: &str) -> String {
 }
 
 fn esc_html(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 fn attr_escape(s: &str) -> String {
@@ -1133,7 +1275,10 @@ fn glob_match(name: &str, pat: &str) -> bool {
 /// `GET /api/explore` — liste un dossier (racine bornée), pour les composants
 /// `Explorer`. Un chemin hors de la racine est rejeté.
 async fn explore(Query(q): Query<ExploreQuery>) -> Json<Value> {
-    let root = q.root.filter(|r| !r.is_empty()).unwrap_or_else(|| ".".to_string());
+    let root = q
+        .root
+        .filter(|r| !r.is_empty())
+        .unwrap_or_else(|| ".".to_string());
     let base = match std::fs::canonicalize(&root) {
         Ok(p) => p,
         Err(e) => return Json(json!({ "t": "error", "m": format!("racine invalide : {e}") })),
@@ -1146,7 +1291,9 @@ async fn explore(Query(q): Query<ExploreQuery>) -> Json<Value> {
             match cand_abs {
                 Ok(c) if c.starts_with(&base) => c,
                 Ok(_) => return Json(json!({ "t": "error", "m": "chemin hors de la racine" })),
-                Err(e) => return Json(json!({ "t": "error", "m": format!("chemin invalide : {e}") })),
+                Err(e) => {
+                    return Json(json!({ "t": "error", "m": format!("chemin invalide : {e}") }))
+                }
             }
         }
     };
@@ -1179,9 +1326,16 @@ async fn explore(Query(q): Query<ExploreQuery>) -> Json<Value> {
 
     let rel = target.strip_prefix(&base).unwrap_or(&base);
     let rel: String = rel.to_string_lossy().replace('\\', "/");
-    let rel = if rel.is_empty() { String::new() } else { format!("{rel}/") };
+    let rel = if rel.is_empty() {
+        String::new()
+    } else {
+        format!("{rel}/")
+    };
 
-    vlog_none(&format!("GET /api/explore -> {}", if rel.is_empty() { "." } else { &rel }));
+    vlog_none(&format!(
+        "GET /api/explore -> {}",
+        if rel.is_empty() { "." } else { &rel }
+    ));
     Json(json!({
         "t": "ok",
         "root": base.to_string_lossy(),

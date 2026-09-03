@@ -3,7 +3,6 @@ use grio::*;
 fn main() -> grio::Result<()> {
     App::new("Grid & Conteneurs · grio demo")
         .subtitle("Démonstration du composant Grid, de l'imbrication de conteneurs (Row, Column, Grid) et des alignements.")
-        
         .panel("1. Grille Responsive à 3 Colonnes (App::grid)", |p| {
             p.grid(3, |g| {
                 g.item(Text::new("c1").label("Colonne 1").value("Texte A"));

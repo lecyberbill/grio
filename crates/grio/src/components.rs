@@ -125,35 +125,75 @@ pub struct WithLayout<C> {
 impl<C: Component> WithLayout<C> {
     /// Enveloppe `inner` avec une mise en page vide.
     pub fn new(inner: C) -> Self {
-        Self { inner, layout: Layout::default() }
+        Self {
+            inner,
+            layout: Layout::default(),
+        }
     }
     /// Largeur en pixels.
-    pub fn width(mut self, w: u32) -> Self { self.layout.width = Some(w); self }
+    pub fn width(mut self, w: u32) -> Self {
+        self.layout.width = Some(w);
+        self
+    }
     /// Hauteur en pixels.
-    pub fn height(mut self, h: u32) -> Self { self.layout.height = Some(h); self }
+    pub fn height(mut self, h: u32) -> Self {
+        self.layout.height = Some(h);
+        self
+    }
     /// Largeur maximale en pixels.
-    pub fn max_width(mut self, mw: u32) -> Self { self.layout.max_width = Some(mw); self }
+    pub fn max_width(mut self, mw: u32) -> Self {
+        self.layout.max_width = Some(mw);
+        self
+    }
     /// Hauteur maximale en pixels.
-    pub fn max_height(mut self, mh: u32) -> Self { self.layout.max_height = Some(mh); self }
+    pub fn max_height(mut self, mh: u32) -> Self {
+        self.layout.max_height = Some(mh);
+        self
+    }
     /// Proportion relative dans la ligne (comme `scale` de Gradio).
-    pub fn scale(mut self, s: u32) -> Self { self.layout.scale = Some(s); self }
+    pub fn scale(mut self, s: u32) -> Self {
+        self.layout.scale = Some(s);
+        self
+    }
     /// Largeur minimale en pixels.
-    pub fn min_width(mut self, w: u32) -> Self { self.layout.min_width = Some(w); self }
+    pub fn min_width(mut self, w: u32) -> Self {
+        self.layout.min_width = Some(w);
+        self
+    }
     /// Remplace la mise en page en un appel.
-    pub fn set_layout(mut self, l: Layout) -> Self { self.layout = l; self }
+    pub fn set_layout(mut self, l: Layout) -> Self {
+        self.layout = l;
+        self
+    }
     /// Restitue le composant d'origine.
-    pub fn into_inner(self) -> C { self.inner }
+    pub fn into_inner(self) -> C {
+        self.inner
+    }
     /// Réglage courant.
-    pub fn layout(&self) -> Layout { self.layout }
+    pub fn layout(&self) -> Layout {
+        self.layout
+    }
 }
 
 impl<C: Component> Component for WithLayout<C> {
-    fn id(&self) -> &str { self.inner.id() }
-    fn kind(&self) -> &'static str { self.inner.kind() }
-    fn props(&self) -> Value { self.inner.props() }
-    fn role(&self) -> Role { self.inner.role() }
-    fn children(&self) -> Vec<&dyn Component> { self.inner.children() }
-    fn layout(&self) -> Layout { self.layout }
+    fn id(&self) -> &str {
+        self.inner.id()
+    }
+    fn kind(&self) -> &'static str {
+        self.inner.kind()
+    }
+    fn props(&self) -> Value {
+        self.inner.props()
+    }
+    fn role(&self) -> Role {
+        self.inner.role()
+    }
+    fn children(&self) -> Vec<&dyn Component> {
+        self.inner.children()
+    }
+    fn layout(&self) -> Layout {
+        self.layout
+    }
 }
 
 /// Conversion commode `T: Component → Box<dyn Component>`.
@@ -189,25 +229,53 @@ pub struct Text {
 impl Text {
     /// Crée un champ texte, avec son identifiant.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), value: String::new(), placeholder: None, lines: 1, interactive: true }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: String::new(),
+            placeholder: None,
+            lines: 1,
+            interactive: true,
+        }
     }
     /// Définit l'étiquette affichée au-dessus du champ.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Valeur initiale.
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
     /// Texte indicatif affiché quand le champ est vide.
-    pub fn placeholder(mut self, p: impl Into<String>) -> Self { self.placeholder = Some(p.into()); self }
+    pub fn placeholder(mut self, p: impl Into<String>) -> Self {
+        self.placeholder = Some(p.into());
+        self
+    }
     /// Nombre de lignes affichées (1 = input classique, >1 = textarea).
-    pub fn lines(mut self, n: usize) -> Self { self.lines = n.max(1); self }
+    pub fn lines(mut self, n: usize) -> Self {
+        self.lines = n.max(1);
+        self
+    }
     /// Autorise ou non l'édition par l'utilisateur (champ grisé ; la valeur
     /// reste envoyée dans le snapshot d'entrées).
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
 }
 
 impl Component for Text {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "text" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "text"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,
@@ -234,27 +302,59 @@ pub struct Slider {
 impl Slider {
     /// Crée un curseur, avec son identifiant.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), min: 0.0, max: 100.0, step: 1.0, value: 0.0, interactive: true }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            min: 0.0,
+            max: 100.0,
+            step: 1.0,
+            value: 0.0,
+            interactive: true,
+        }
     }
     /// Étiquette affichée au-dessus du curseur.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Borne minimum (f64).
-    pub fn min(mut self, v: f64) -> Self { self.min = v; self }
+    pub fn min(mut self, v: f64) -> Self {
+        self.min = v;
+        self
+    }
     /// Borne maximum (f64).
-    pub fn max(mut self, v: f64) -> Self { self.max = v; self }
+    pub fn max(mut self, v: f64) -> Self {
+        self.max = v;
+        self
+    }
     /// Pas d'incrément (f64).
-    pub fn step(mut self, v: f64) -> Self { self.step = v; self }
+    pub fn step(mut self, v: f64) -> Self {
+        self.step = v;
+        self
+    }
     /// Valeur initiale.
-    pub fn value(mut self, v: f64) -> Self { self.value = v; self }
+    pub fn value(mut self, v: f64) -> Self {
+        self.value = v;
+        self
+    }
     /// Autorise ou non la manipulation par l'utilisateur (curseur grisé ;
     /// la valeur reste envoyée dans le snapshot d'entrées).
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
 }
 
 impl Component for Slider {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "slider" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "slider"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
         json!({ "label": self.label, "min": self.min, "max": self.max, "step": self.step, "value": self.value, "interactive": self.interactive })
     }
@@ -271,18 +371,34 @@ pub struct Output {
 impl Output {
     /// Crée une sortie texte, avec son identifiant.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), value: String::new() }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: String::new(),
+        }
     }
     /// Étiquette affichée en tête de la carte.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Valeur initiale.
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
 }
 
 impl Component for Output {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "output" }
-    fn role(&self) -> Role { Role::Output }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "output"
+    }
+    fn role(&self) -> Role {
+        Role::Output
+    }
     fn props(&self) -> Value {
         json!({ "label": self.label, "value": self.value })
     }
@@ -298,18 +414,33 @@ pub struct Markdown {
 impl Markdown {
     /// Crée un bloc Markdown, avec son identifiant.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), text: String::new() }
+        Self {
+            id: id.into(),
+            text: String::new(),
+        }
     }
     /// Contenu Markdown initial.
-    pub fn text(mut self, t: impl Into<String>) -> Self { self.text = t.into(); self }
+    pub fn text(mut self, t: impl Into<String>) -> Self {
+        self.text = t.into();
+        self
+    }
     /// Alias de [`Markdown::text`] pour cohérence avec les autres composants.
-    pub fn value(mut self, t: impl Into<String>) -> Self { self.text = t.into(); self }
+    pub fn value(mut self, t: impl Into<String>) -> Self {
+        self.text = t.into();
+        self
+    }
 }
 
 impl Component for Markdown {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "markdown" }
-    fn role(&self) -> Role { Role::Output }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "markdown"
+    }
+    fn role(&self) -> Role {
+        Role::Output
+    }
     fn props(&self) -> Value {
         json!({ "text": self.text })
     }
@@ -327,19 +458,37 @@ pub struct Button {
 impl Button {
     /// Crée un bouton, avec son identifiant.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), variant: "primary".to_string(), primary: false }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            variant: "primary".to_string(),
+            primary: false,
+        }
     }
     /// Texte affiché sur le bouton.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Style secondaire (contour). Style principal par défaut.
-    pub fn secondary(mut self) -> Self { self.variant = "secondary".to_string(); self }
+    pub fn secondary(mut self) -> Self {
+        self.variant = "secondary".to_string();
+        self
+    }
     /// Marque le bouton comme déclencheur de soumission (`on_submit`).
-    pub fn primary(mut self) -> Self { self.primary = true; self }
+    pub fn primary(mut self) -> Self {
+        self.primary = true;
+        self
+    }
 }
 
 impl Component for Button {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "button" }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "button"
+    }
     fn props(&self) -> Value {
         json!({ "label": self.label, "variant": self.variant, "primary": self.primary })
     }
@@ -373,22 +522,44 @@ impl Progress {
         }
     }
     /// Étiquette affichée au-dessus ou à côté de la progression.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Définit la variante visuelle (`"bar"`, `"circle"`, `"pie"`).
-    pub fn variant(mut self, v: impl Into<String>) -> Self { self.variant = v.into(); self }
+    pub fn variant(mut self, v: impl Into<String>) -> Self {
+        self.variant = v.into();
+        self
+    }
     /// Configure la variante barre horizontale (défaut).
-    pub fn bar(mut self) -> Self { self.variant = "bar".to_string(); self }
+    pub fn bar(mut self) -> Self {
+        self.variant = "bar".to_string();
+        self
+    }
     /// Configure la variante anneau circulaire SVG.
-    pub fn circle(mut self) -> Self { self.variant = "circle".to_string(); self }
+    pub fn circle(mut self) -> Self {
+        self.variant = "circle".to_string();
+        self
+    }
     /// Configure la variante camembert sectoriel (pie chart).
-    pub fn pie(mut self) -> Self { self.variant = "pie".to_string(); self }
+    pub fn pie(mut self) -> Self {
+        self.variant = "pie".to_string();
+        self
+    }
     /// Dimension optionnelle en pixels (ex: diamètre du cercle ou camembert).
-    pub fn size(mut self, s: usize) -> Self { self.size = Some(s); self }
+    pub fn size(mut self, s: usize) -> Self {
+        self.size = Some(s);
+        self
+    }
 }
 
 impl Component for Progress {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "progress" }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "progress"
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,
@@ -413,24 +584,55 @@ pub struct Image {
 impl Image {
     /// Crée une image, avec son identifiant. Entrée (upload) par défaut.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), value: String::new(), interactive: true, out: false }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: String::new(),
+            interactive: true,
+            out: false,
+        }
     }
     /// Étiquette affichée au-dessus.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Data URL initiale affichée.
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
     /// Ouvre/ferme le contrôle d'upload (fichier ou glisser-déposer).
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
     /// Déclare l'image **sortie** (résultat calculé, pas d'upload).
-    pub fn output(mut self) -> Self { self.out = true; self }
+    pub fn output(mut self) -> Self {
+        self.out = true;
+        self
+    }
     /// Déclare l'image **entrée** (upload — comportement par défaut).
-    pub fn input(mut self) -> Self { self.out = false; self }
+    pub fn input(mut self) -> Self {
+        self.out = false;
+        self
+    }
 }
 
 impl Component for Image {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "image" }
-    fn role(&self) -> Role { if self.out { Role::Output } else { Role::Input } }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "image"
+    }
+    fn role(&self) -> Role {
+        if self.out {
+            Role::Output
+        } else {
+            Role::Input
+        }
+    }
     fn props(&self) -> Value {
         json!({ "label": self.label, "value": self.value, "interactive": self.interactive })
     }
@@ -486,33 +688,76 @@ impl ImageEditor {
         }
     }
     /// Étiquette affichée au-dessus.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Image d'arrière-plan initiale (data URL) chargée dans le canvas.
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
     /// Autorise ou non l'édition (affichage seul si `false`).
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
     /// Nombre de **calques** d'annotation (1..=4, défaut 2).
-    pub fn layers(mut self, n: usize) -> Self { self.layers = n.clamp(1, 4); self }
+    pub fn layers(mut self, n: usize) -> Self {
+        self.layers = n.clamp(1, 4);
+        self
+    }
     /// Active le pinceau et la gomme (défaut : `true`).
-    pub fn brush(mut self, on: bool) -> Self { self.brush = on; self }
+    pub fn brush(mut self, on: bool) -> Self {
+        self.brush = on;
+        self
+    }
     /// Active le **rognage** (crop) (défaut : `true`).
-    pub fn crop(mut self, on: bool) -> Self { self.crop = on; self }
+    pub fn crop(mut self, on: bool) -> Self {
+        self.crop = on;
+        self
+    }
     /// Active les formes : rectangle, ligne, flèche (défaut : `true`).
-    pub fn shapes(mut self, on: bool) -> Self { self.shapes = on; self }
+    pub fn shapes(mut self, on: bool) -> Self {
+        self.shapes = on;
+        self
+    }
     /// Active les filtres (niveaux de gris, inversion, luminosité, flou).
-    pub fn filters(mut self, on: bool) -> Self { self.filters = on; self }
+    pub fn filters(mut self, on: bool) -> Self {
+        self.filters = on;
+        self
+    }
     /// Active la rotation 90° (défaut : `true`).
-    pub fn rotflip(mut self, on: bool) -> Self { self.rotflip = on; self }
+    pub fn rotflip(mut self, on: bool) -> Self {
+        self.rotflip = on;
+        self
+    }
     /// Déclare l'éditeur **sortie** (affichage seul de `value`).
-    pub fn output(mut self) -> Self { self.out = true; self }
+    pub fn output(mut self) -> Self {
+        self.out = true;
+        self
+    }
     /// Déclare l'éditeur **entrée** (édition — par défaut).
-    pub fn input(mut self) -> Self { self.out = false; self }
+    pub fn input(mut self) -> Self {
+        self.out = false;
+        self
+    }
 }
 
 impl Component for ImageEditor {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "imageeditor" }
-    fn role(&self) -> Role { if self.out { Role::Output } else { Role::Input } }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "imageeditor"
+    }
+    fn role(&self) -> Role {
+        if self.out {
+            Role::Output
+        } else {
+            Role::Input
+        }
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label, "value": self.value, "interactive": self.interactive,
@@ -537,27 +782,62 @@ pub struct Audio {
 impl Audio {
     /// Crée un audio, avec son identifiant. Entrée par défaut.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), value: String::new(), interactive: true, out: false, live: false }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: String::new(),
+            interactive: true,
+            out: false,
+            live: false,
+        }
     }
     /// Étiquette affichée au-dessus.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Data URL initiale.
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
     /// Ouvre/ferme le contrôle d'upload.
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
     /// Déclare l'audio **sortie** (lecteur de résultats).
-    pub fn output(mut self) -> Self { self.out = true; self }
+    pub fn output(mut self) -> Self {
+        self.out = true;
+        self
+    }
     /// Déclare l'audio **entrée** (upload — par défaut).
-    pub fn input(mut self) -> Self { self.out = false; self }
+    pub fn input(mut self) -> Self {
+        self.out = false;
+        self
+    }
     /// Mode **micro live** : le client capture le micro et pousse des chunks
     /// (`{t:"stream"}`) — voir `App::on_stream`.
-    pub fn live(mut self, on: bool) -> Self { self.live = on; self }
+    pub fn live(mut self, on: bool) -> Self {
+        self.live = on;
+        self
+    }
 }
 
 impl Component for Audio {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "audio" }
-    fn role(&self) -> Role { if self.out { Role::Output } else { Role::Input } }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "audio"
+    }
+    fn role(&self) -> Role {
+        if self.out {
+            Role::Output
+        } else {
+            Role::Input
+        }
+    }
     fn props(&self) -> Value {
         json!({ "label": self.label, "value": self.value, "interactive": self.interactive, "live": self.live })
     }
@@ -578,27 +858,62 @@ pub struct Video {
 impl Video {
     /// Crée une vidéo, avec son identifiant. Sortie (affichage) par défaut.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), value: String::new(), interactive: false, out: true, live: false }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: String::new(),
+            interactive: false,
+            out: true,
+            live: false,
+        }
     }
     /// Étiquette affichée au-dessus.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Data URL initiale (ou URL de flux).
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
     /// Ouvre/ferme le contrôle d'upload.
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
     /// Déclare la vidéo **entrée** (upload).
-    pub fn input(mut self) -> Self { self.out = false; self }
+    pub fn input(mut self) -> Self {
+        self.out = false;
+        self
+    }
     /// Déclare la vidéo **sortie** (affichage — par défaut).
-    pub fn output(mut self) -> Self { self.out = true; self }
+    pub fn output(mut self) -> Self {
+        self.out = true;
+        self
+    }
     /// Mode **caméra live** : la caméra s'affiche en local et pousse des
     /// chunks `{t:"stream"}`.
-    pub fn live(mut self, on: bool) -> Self { self.live = on; self }
+    pub fn live(mut self, on: bool) -> Self {
+        self.live = on;
+        self
+    }
 }
 
 impl Component for Video {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "video" }
-    fn role(&self) -> Role { if self.out { Role::Output } else { Role::Input } }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "video"
+    }
+    fn role(&self) -> Role {
+        if self.out {
+            Role::Output
+        } else {
+            Role::Input
+        }
+    }
     fn props(&self) -> Value {
         json!({ "label": self.label, "value": self.value, "interactive": self.interactive, "live": self.live })
     }
@@ -627,20 +942,39 @@ impl Row {
         }
     }
     /// Espace entre les enfants, en pixels.
-    pub fn gap(mut self, g: f64) -> Self { self.gap = g; self }
+    pub fn gap(mut self, g: f64) -> Self {
+        self.gap = g;
+        self
+    }
     /// Autorise ou interdit le retour à la ligne (`flex-wrap`).
-    pub fn wrap(mut self, w: bool) -> Self { self.wrap = w; self }
+    pub fn wrap(mut self, w: bool) -> Self {
+        self.wrap = w;
+        self
+    }
     /// Alignement transversal (CSS `align-items` : `"start"`, `"center"`, `"end"`, `"stretch"`).
-    pub fn align(mut self, a: impl Into<String>) -> Self { self.align = Some(a.into()); self }
+    pub fn align(mut self, a: impl Into<String>) -> Self {
+        self.align = Some(a.into());
+        self
+    }
     /// Justification principale (CSS `justify-content` : `"start"`, `"center"`, `"end"`, `"space-between"`, `"space-around"`).
-    pub fn justify(mut self, j: impl Into<String>) -> Self { self.justify = Some(j.into()); self }
+    pub fn justify(mut self, j: impl Into<String>) -> Self {
+        self.justify = Some(j.into());
+        self
+    }
     /// Ajoute un composant dans la rangée.
-    pub fn item(mut self, c: impl IntoBox) -> Self { self.children.push(c.into_box()); self }
+    pub fn item(mut self, c: impl IntoBox) -> Self {
+        self.children.push(c.into_box());
+        self
+    }
 }
 
 impl Component for Row {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "row" }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "row"
+    }
     fn props(&self) -> Value {
         let mut obj = serde_json::Map::new();
         obj.insert("gap".into(), json!(self.gap));
@@ -653,7 +987,9 @@ impl Component for Row {
         }
         Value::Object(obj)
     }
-    fn children(&self) -> Vec<&dyn Component> { children_refs(&self.children) }
+    fn children(&self) -> Vec<&dyn Component> {
+        children_refs(&self.children)
+    }
 }
 
 /// Conteneur vertical : les enfants s'empilent (flex column).
@@ -677,19 +1013,37 @@ impl Column {
         }
     }
     /// Espace entre les enfants, en pixels.
-    pub fn gap(mut self, g: f64) -> Self { self.gap = g; self }
+    pub fn gap(mut self, g: f64) -> Self {
+        self.gap = g;
+        self
+    }
     /// Alignement transversal (CSS `align-items` : `"start"`, `"center"`, `"end"`, `"stretch"`).
-    pub fn align(mut self, a: impl Into<String>) -> Self { self.align = Some(a.into()); self }
+    pub fn align(mut self, a: impl Into<String>) -> Self {
+        self.align = Some(a.into());
+        self
+    }
     /// Justification principale (CSS `justify-content` : `"start"`, `"center"`, `"end"`, `"space-between"`).
-    pub fn justify(mut self, j: impl Into<String>) -> Self { self.justify = Some(j.into()); self }
+    pub fn justify(mut self, j: impl Into<String>) -> Self {
+        self.justify = Some(j.into());
+        self
+    }
     /// Ajoute un composant dans la colonne.
-    pub fn item(mut self, c: impl IntoBox) -> Self { self.children.push(c.into_box()); self }
-    pub(crate) fn push(&mut self, c: Box<dyn Component>) { self.children.push(c); }
+    pub fn item(mut self, c: impl IntoBox) -> Self {
+        self.children.push(c.into_box());
+        self
+    }
+    pub(crate) fn push(&mut self, c: Box<dyn Component>) {
+        self.children.push(c);
+    }
 }
 
 impl Component for Column {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "column" }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "column"
+    }
     fn props(&self) -> Value {
         let mut obj = serde_json::Map::new();
         obj.insert("gap".into(), json!(self.gap));
@@ -701,7 +1055,9 @@ impl Component for Column {
         }
         Value::Object(obj)
     }
-    fn children(&self) -> Vec<&dyn Component> { children_refs(&self.children) }
+    fn children(&self) -> Vec<&dyn Component> {
+        children_refs(&self.children)
+    }
 }
 
 /// Conteneur en grille CSS : organise ses enfants en lignes et colonnes.
@@ -732,18 +1088,34 @@ impl Grid {
         self
     }
     /// Espacement global (horizontal et vertical) en pixels.
-    pub fn gap(mut self, g: f64) -> Self { self.gap = g; self }
+    pub fn gap(mut self, g: f64) -> Self {
+        self.gap = g;
+        self
+    }
     /// Espacement horizontal en pixels.
-    pub fn gap_x(mut self, gx: f64) -> Self { self.gap_x = Some(gx); self }
+    pub fn gap_x(mut self, gx: f64) -> Self {
+        self.gap_x = Some(gx);
+        self
+    }
     /// Espacement vertical en pixels.
-    pub fn gap_y(mut self, gy: f64) -> Self { self.gap_y = Some(gy); self }
+    pub fn gap_y(mut self, gy: f64) -> Self {
+        self.gap_y = Some(gy);
+        self
+    }
     /// Ajoute un composant dans la grille.
-    pub fn item(mut self, c: impl IntoBox) -> Self { self.children.push(c.into_box()); self }
+    pub fn item(mut self, c: impl IntoBox) -> Self {
+        self.children.push(c.into_box());
+        self
+    }
 }
 
 impl Component for Grid {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "grid" }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "grid"
+    }
     fn props(&self) -> Value {
         let mut obj = serde_json::Map::new();
         obj.insert("columns".into(), json!(self.columns));
@@ -756,7 +1128,9 @@ impl Component for Grid {
         }
         Value::Object(obj)
     }
-    fn children(&self) -> Vec<&dyn Component> { children_refs(&self.children) }
+    fn children(&self) -> Vec<&dyn Component> {
+        children_refs(&self.children)
+    }
 }
 
 /// Carte (panel) avec un titre et un corps empilé en colonne.
@@ -770,21 +1144,43 @@ pub struct Panel {
 impl Panel {
     /// Crée une carte, avec son identifiant.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), gap: 16.0, children: Vec::new() }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            gap: 16.0,
+            children: Vec::new(),
+        }
     }
     /// Titre affiché dans l'entête de la carte.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Espace entre les enfants, en pixels.
-    pub fn gap(mut self, g: f64) -> Self { self.gap = g; self }
+    pub fn gap(mut self, g: f64) -> Self {
+        self.gap = g;
+        self
+    }
     /// Ajoute un composant dans la carte.
-    pub fn item(mut self, c: impl IntoBox) -> Self { self.children.push(c.into_box()); self }
+    pub fn item(mut self, c: impl IntoBox) -> Self {
+        self.children.push(c.into_box());
+        self
+    }
 }
 
 impl Component for Panel {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "panel" }
-    fn props(&self) -> Value { json!({ "label": self.label, "gap": self.gap }) }
-    fn children(&self) -> Vec<&dyn Component> { children_refs(&self.children) }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "panel"
+    }
+    fn props(&self) -> Value {
+        json!({ "label": self.label, "gap": self.gap })
+    }
+    fn children(&self) -> Vec<&dyn Component> {
+        children_refs(&self.children)
+    }
 }
 
 /// Collecteur d'éléments pour une section d'onglet / accordéon.
@@ -795,7 +1191,10 @@ pub struct SectionBuilder {
 
 impl Default for SectionBuilder {
     fn default() -> Self {
-        Self { children: Vec::new(), gap: 14.0 }
+        Self {
+            children: Vec::new(),
+            gap: 14.0,
+        }
     }
 }
 
@@ -828,7 +1227,9 @@ impl SectionBuilder {
     pub fn grid(&mut self, columns: usize, task: impl FnOnce(&mut RowBuilder)) {
         let mut b = RowBuilder::default();
         task(&mut b);
-        let mut g = Grid::new(format!("grid-{}", self.children.len())).columns(columns).gap(b.gap);
+        let mut g = Grid::new(format!("grid-{}", self.children.len()))
+            .columns(columns)
+            .gap(b.gap);
         for c in b.children {
             g.children.push(c);
         }
@@ -839,7 +1240,9 @@ impl SectionBuilder {
         let label = label.into();
         let mut b = RowBuilder::default();
         task(&mut b);
-        let mut p = Panel::new(format!("panel-{}", label)).label(label).gap(b.gap);
+        let mut p = Panel::new(format!("panel-{}", label))
+            .label(label)
+            .gap(b.gap);
         for c in b.children {
             p.children.push(c);
         }
@@ -862,10 +1265,18 @@ pub struct Tabs {
 impl Tabs {
     /// Crée un bloc d'onglets, avec son identifiant.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), labels: Vec::new(), children: Vec::new(), selected: 0 }
+        Self {
+            id: id.into(),
+            labels: Vec::new(),
+            children: Vec::new(),
+            selected: 0,
+        }
     }
     /// Définit l'onglet sélectionné initialement (0-indexed).
-    pub fn selected(mut self, idx: usize) -> Self { self.selected = idx; self }
+    pub fn selected(mut self, idx: usize) -> Self {
+        self.selected = idx;
+        self
+    }
     /// Ajoute un onglet (étiquette + contenu empilé en colonne).
     pub fn tab(mut self, label: impl Into<String>, task: impl FnOnce(&mut SectionBuilder)) -> Self {
         let mut b = SectionBuilder::default();
@@ -881,10 +1292,18 @@ impl Tabs {
 }
 
 impl Component for Tabs {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "tabs" }
-    fn props(&self) -> Value { json!({ "labels": self.labels, "selected": self.selected }) }
-    fn children(&self) -> Vec<&dyn Component> { children_refs(&self.children) }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "tabs"
+    }
+    fn props(&self) -> Value {
+        json!({ "labels": self.labels, "selected": self.selected })
+    }
+    fn children(&self) -> Vec<&dyn Component> {
+        children_refs(&self.children)
+    }
 }
 
 /// Accordéon : liste de sections repliables (balises `<details>` natives).
@@ -898,12 +1317,24 @@ pub struct Accordion {
 impl Accordion {
     /// Crée un accordéon, avec son identifiant.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), labels: Vec::new(), children: Vec::new(), open: false }
+        Self {
+            id: id.into(),
+            labels: Vec::new(),
+            children: Vec::new(),
+            open: false,
+        }
     }
     /// La première section est dépliée au chargement.
-    pub fn open(mut self, open: bool) -> Self { self.open = open; self }
+    pub fn open(mut self, open: bool) -> Self {
+        self.open = open;
+        self
+    }
     /// Ajoute une section repliable (titre + contenu empilé en colonne).
-    pub fn section(mut self, label: impl Into<String>, task: impl FnOnce(&mut SectionBuilder)) -> Self {
+    pub fn section(
+        mut self,
+        label: impl Into<String>,
+        task: impl FnOnce(&mut SectionBuilder),
+    ) -> Self {
         let mut b = SectionBuilder::default();
         task(&mut b);
         let mut col = Column::new(format!("{}-{}", self.id, self.labels.len())).gap(b.gap);
@@ -917,10 +1348,18 @@ impl Accordion {
 }
 
 impl Component for Accordion {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "accordion" }
-    fn props(&self) -> Value { json!({ "labels": self.labels, "open": self.open }) }
-    fn children(&self) -> Vec<&dyn Component> { children_refs(&self.children) }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "accordion"
+    }
+    fn props(&self) -> Value {
+        json!({ "labels": self.labels, "open": self.open })
+    }
+    fn children(&self) -> Vec<&dyn Component> {
+        children_refs(&self.children)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -939,20 +1378,40 @@ pub struct Checkbox {
 impl Checkbox {
     /// Crée une case à cocher, avec son identifiant.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), value: false, interactive: true }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: false,
+            interactive: true,
+        }
     }
     /// Étiquette affichée à droite de la case.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// État initial (coché ou non).
-    pub fn value(mut self, v: bool) -> Self { self.value = v; self }
+    pub fn value(mut self, v: bool) -> Self {
+        self.value = v;
+        self
+    }
     /// Autorise ou non le clic (case grisée).
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
 }
 
 impl Component for Checkbox {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "checkbox" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "checkbox"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
         json!({ "label": self.label, "value": self.value, "interactive": self.interactive })
     }
@@ -984,15 +1443,24 @@ impl Dropdown {
         }
     }
     /// Étiquette affichée au-dessus.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Choix proposés, sous forme `(libellé, valeur)`.
     pub fn choices(mut self, items: &[(&str, &str)]) -> Self {
-        self.choices = items.iter().map(|(l, v)| (l.to_string(), v.to_string())).collect();
+        self.choices = items
+            .iter()
+            .map(|(l, v)| (l.to_string(), v.to_string()))
+            .collect();
         self
     }
     /// Choix proposés avec libellé = valeur.
     pub fn choices_str(mut self, items: &[&str]) -> Self {
-        self.choices = items.iter().map(|s| (s.to_string(), s.to_string())).collect();
+        self.choices = items
+            .iter()
+            .map(|s| (s.to_string(), s.to_string()))
+            .collect();
         self
     }
     /// Alias pour choices_str.
@@ -1000,24 +1468,42 @@ impl Dropdown {
         self.choices_str(items)
     }
     /// Valeur sélectionnée initialement (choix unique).
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = json!(v.into()); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = json!(v.into());
+        self
+    }
     /// Valeurs sélectionnées initialement (choix multiple).
     pub fn value_list(mut self, v: &[&str]) -> Self {
         self.value = json!(v);
         self
     }
     /// Sélection multiple (liste).
-    pub fn multiple(mut self, on: bool) -> Self { self.multiple = on; self }
+    pub fn multiple(mut self, on: bool) -> Self {
+        self.multiple = on;
+        self
+    }
     /// Autorise la saisie d'une valeur hors liste.
-    pub fn allow_custom(mut self, on: bool) -> Self { self.allow_custom = on; self }
+    pub fn allow_custom(mut self, on: bool) -> Self {
+        self.allow_custom = on;
+        self
+    }
     /// Autorise ou non l'interaction.
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
 }
 
 impl Component for Dropdown {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "dropdown" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "dropdown"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
         let choices: Vec<Value> = self
             .choices
@@ -1045,24 +1531,52 @@ pub struct DatePicker {
 impl DatePicker {
     /// Crée un sélecteur de date, avec son identifiant.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), value: String::new(), min: None, max: None, interactive: true }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: String::new(),
+            min: None,
+            max: None,
+            interactive: true,
+        }
     }
     /// Étiquette affichée au-dessus.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Date initiale (ISO `YYYY-MM-DD`).
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
     /// Borne minimale (ISO).
-    pub fn min(mut self, m: impl Into<String>) -> Self { self.min = Some(m.into()); self }
+    pub fn min(mut self, m: impl Into<String>) -> Self {
+        self.min = Some(m.into());
+        self
+    }
     /// Borne maximale (ISO).
-    pub fn max(mut self, m: impl Into<String>) -> Self { self.max = Some(m.into()); self }
+    pub fn max(mut self, m: impl Into<String>) -> Self {
+        self.max = Some(m.into());
+        self
+    }
     /// Autorise ou non l'interaction.
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
 }
 
 impl Component for DatePicker {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "date" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "date"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
         json!({ "label": self.label, "value": self.value, "min": self.min, "max": self.max, "interactive": self.interactive })
     }
@@ -1080,20 +1594,40 @@ pub struct TimePicker {
 impl TimePicker {
     /// Crée un sélecteur d'heure, avec son identifiant.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), value: String::new(), interactive: true }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: String::new(),
+            interactive: true,
+        }
     }
     /// Étiquette affichée au-dessus.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Heure initiale (`HH:MM`).
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
     /// Autorise ou non l'interaction.
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
 }
 
 impl Component for TimePicker {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "time" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "time"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
         json!({ "label": self.label, "value": self.value, "interactive": self.interactive })
     }
@@ -1118,10 +1652,21 @@ pub struct Dataframe {
 impl Dataframe {
     /// Crée un tableau, avec son identifiant.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), headers: Vec::new(), value: json!([]), interactive: true, addable: true, sortable: true }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            headers: Vec::new(),
+            value: json!([]),
+            interactive: true,
+            addable: true,
+            sortable: true,
+        }
     }
     /// Étiquette affichée au-dessus.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Noms de colonnes (sinon la première ligne des données sert d'entête).
     pub fn headers(mut self, items: &[&str]) -> Self {
         self.headers = items.iter().map(|s| s.to_string()).collect();
@@ -1133,17 +1678,32 @@ impl Dataframe {
         self
     }
     /// Autorise l'édition des cellules.
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
     /// Affiche les boutons d'ajout/suppression de rangées.
-    pub fn addable(mut self, on: bool) -> Self { self.addable = on; self }
+    pub fn addable(mut self, on: bool) -> Self {
+        self.addable = on;
+        self
+    }
     /// Autorise le **tri par colonne** (clic sur l'entête, asc/desc).
-    pub fn sortable(mut self, on: bool) -> Self { self.sortable = on; self }
+    pub fn sortable(mut self, on: bool) -> Self {
+        self.sortable = on;
+        self
+    }
 }
 
 impl Component for Dataframe {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "dataframe" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "dataframe"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
         json!({ "label": self.label, "headers": self.headers, "value": self.value, "interactive": self.interactive, "addable": self.addable, "sortable": self.sortable })
     }
@@ -1185,30 +1745,59 @@ impl Plot {
         }
     }
     /// Étiquette affichée au-dessus.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Type de graphique : `"line"`, `"bar"` ou `"scatter"`.
-    pub fn variant(mut self, v: &'static str) -> Self { self.variant = v; self }
+    pub fn variant(mut self, v: &'static str) -> Self {
+        self.variant = v;
+        self
+    }
     /// Titre affiché au-dessus du tracé.
-    pub fn title(mut self, t: impl Into<String>) -> Self { self.title = Some(t.into()); self }
+    pub fn title(mut self, t: impl Into<String>) -> Self {
+        self.title = Some(t.into());
+        self
+    }
     /// Libellé de l'axe X.
-    pub fn xlabel(mut self, t: impl Into<String>) -> Self { self.xlabel = Some(t.into()); self }
+    pub fn xlabel(mut self, t: impl Into<String>) -> Self {
+        self.xlabel = Some(t.into());
+        self
+    }
     /// Libellé de l'axe Y.
-    pub fn ylabel(mut self, t: impl Into<String>) -> Self { self.ylabel = Some(t.into()); self }
+    pub fn ylabel(mut self, t: impl Into<String>) -> Self {
+        self.ylabel = Some(t.into());
+        self
+    }
     /// Couleurs de série (au moins une).
-    pub fn colors(mut self, c: &[&str]) -> Self { self.colors = c.iter().map(|s| s.to_string()).collect(); self }
+    pub fn colors(mut self, c: &[&str]) -> Self {
+        self.colors = c.iter().map(|s| s.to_string()).collect();
+        self
+    }
     /// Taille du canevas en pixels.
-    pub fn size(mut self, w: u32, h: u32) -> Self { self.width = w; self.height = h; self }
+    pub fn size(mut self, w: u32, h: u32) -> Self {
+        self.width = w;
+        self.height = h;
+        self
+    }
     /// Données initiales (séries).
     pub fn data<T: serde::Serialize>(mut self, v: &T) -> Self {
-        self.value = serde_json::to_value(v).unwrap_or_else(|_| json!({ "labels": [], "series": [] }));
+        self.value =
+            serde_json::to_value(v).unwrap_or_else(|_| json!({ "labels": [], "series": [] }));
         self
     }
 }
 
 impl Component for Plot {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "plot" }
-    fn role(&self) -> Role { Role::Output }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "plot"
+    }
+    fn role(&self) -> Role {
+        Role::Output
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label, "variant": self.variant, "title": self.title,
@@ -1264,9 +1853,15 @@ impl Gallery {
         }
     }
     /// Étiquette/Titre affiché au-dessus de la galerie.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Alias pour label (titre).
-    pub fn title(mut self, t: impl Into<String>) -> Self { self.label = t.into(); self }
+    pub fn title(mut self, t: impl Into<String>) -> Self {
+        self.label = t.into();
+        self
+    }
     /// Images initiales (data URLs ou URLs).
     pub fn value(mut self, items: &[&str]) -> Self {
         let v: Vec<String> = items.iter().map(|s| s.to_string()).collect();
@@ -1285,41 +1880,96 @@ impl Gallery {
         self
     }
     /// Nombre de colonnes de la grille.
-    pub fn columns(mut self, n: usize) -> Self { self.columns = n.max(1); self }
+    pub fn columns(mut self, n: usize) -> Self {
+        self.columns = n.max(1);
+        self
+    }
     /// Nombre de lignes visibles simultanément (active le défilement si plus d'images).
-    pub fn rows(mut self, n: usize) -> Self { self.rows = Some(n.max(1)); self }
+    pub fn rows(mut self, n: usize) -> Self {
+        self.rows = Some(n.max(1));
+        self
+    }
     /// Hauteur fixe ou relative de la galerie (ex: "500px", "60vh", 500.0).
-    pub fn height(mut self, h: impl Into<String>) -> Self { self.height = Some(h.into()); self }
+    pub fn height(mut self, h: impl Into<String>) -> Self {
+        self.height = Some(h.into());
+        self
+    }
     /// Hauteur minimale du conteneur de la galerie.
-    pub fn min_height(mut self, mh: impl Into<String>) -> Self { self.min_height = Some(mh.into()); self }
+    pub fn min_height(mut self, mh: impl Into<String>) -> Self {
+        self.min_height = Some(mh.into());
+        self
+    }
     /// Hauteur maximale du conteneur avant scrollbar (ex: "650px", "80vh").
-    pub fn max_height(mut self, mh: impl Into<String>) -> Self { self.max_height = Some(mh.into()); self }
+    pub fn max_height(mut self, mh: impl Into<String>) -> Self {
+        self.max_height = Some(mh.into());
+        self
+    }
     /// Limite maximale d'images affichées dans la galerie (les plus récentes en premier).
-    pub fn limit(mut self, n: usize) -> Self { self.limit = Some(n); self }
+    pub fn limit(mut self, n: usize) -> Self {
+        self.limit = Some(n);
+        self
+    }
     /// Hauteur d'une vignette / image de la galerie (ex: "140px", "180px", "220px").
-    pub fn item_height(mut self, ih: impl Into<String>) -> Self { self.item_height = Some(ih.into()); self }
+    pub fn item_height(mut self, ih: impl Into<String>) -> Self {
+        self.item_height = Some(ih.into());
+        self
+    }
     /// Largeur d'une vignette / image de la galerie (ex: "180px", "240px").
-    pub fn item_width(mut self, iw: impl Into<String>) -> Self { self.item_width = Some(iw.into()); self }
+    pub fn item_width(mut self, iw: impl Into<String>) -> Self {
+        self.item_width = Some(iw.into());
+        self
+    }
     /// Ratio d'aspect d'une vignette (ex: "1/1", "16/9", "4/3", "9/16").
-    pub fn aspect_ratio(mut self, ar: impl Into<String>) -> Self { self.aspect_ratio = Some(ar.into()); self }
+    pub fn aspect_ratio(mut self, ar: impl Into<String>) -> Self {
+        self.aspect_ratio = Some(ar.into());
+        self
+    }
     /// Mode d'ajustement des images (`"cover"`, `"contain"`, `"scale-down"`).
-    pub fn object_fit(mut self, fit: impl Into<String>) -> Self { self.object_fit = fit.into(); self }
+    pub fn object_fit(mut self, fit: impl Into<String>) -> Self {
+        self.object_fit = fit.into();
+        self
+    }
     /// Active la visionneuse / lightbox plein écran au clic (défaut : `true`).
-    pub fn allow_preview(mut self, allow: bool) -> Self { self.allow_preview = allow; self }
+    pub fn allow_preview(mut self, allow: bool) -> Self {
+        self.allow_preview = allow;
+        self
+    }
     /// Autorise la sélection/upload.
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
     /// Affiche le bouton d'ajout d'image.
-    pub fn upload(mut self, on: bool) -> Self { self.upload = on; self }
+    pub fn upload(mut self, on: bool) -> Self {
+        self.upload = on;
+        self
+    }
     /// Déclare la galerie **sortie** (affichage seul).
-    pub fn output(mut self) -> Self { self.out = true; self }
+    pub fn output(mut self) -> Self {
+        self.out = true;
+        self
+    }
     /// Déclare la galerie **entrée** (upload — par défaut).
-    pub fn input(mut self) -> Self { self.out = false; self }
+    pub fn input(mut self) -> Self {
+        self.out = false;
+        self
+    }
 }
 
 impl Component for Gallery {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "gallery" }
-    fn role(&self) -> Role { if self.out { Role::Output } else { Role::Input } }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "gallery"
+    }
+    fn role(&self) -> Role {
+        if self.out {
+            Role::Output
+        } else {
+            Role::Input
+        }
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,
@@ -1357,19 +2007,34 @@ pub struct SortableList {
 impl SortableList {
     /// Crée une liste réordonnable, avec son identifiant.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), items: Vec::new(), value: Vec::new(), interactive: true }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            items: Vec::new(),
+            value: Vec::new(),
+            interactive: true,
+        }
     }
     /// Étiquette affichée au-dessus.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Éléments proposés, sous forme `(valeur, libellé)`.
     pub fn items(mut self, list: &[(&str, &str)]) -> Self {
-        self.items = list.iter().map(|(v, l)| (v.to_string(), l.to_string())).collect();
+        self.items = list
+            .iter()
+            .map(|(v, l)| (v.to_string(), l.to_string()))
+            .collect();
         self.value = list.iter().map(|(v, _)| v.to_string()).collect();
         self
     }
     /// Éléments proposés (valeur = libellé).
     pub fn items_str(mut self, list: &[&str]) -> Self {
-        self.items = list.iter().map(|s| (s.to_string(), s.to_string())).collect();
+        self.items = list
+            .iter()
+            .map(|s| (s.to_string(), s.to_string()))
+            .collect();
         self.value = list.iter().map(|s| s.to_string()).collect();
         self
     }
@@ -1385,15 +2050,28 @@ impl SortableList {
         self
     }
     /// Autorise ou non le réordonnancement.
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
 }
 
 impl Component for SortableList {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "list" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "list"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
-        let items: Vec<Value> = self.items.iter().map(|(v, l)| json!({ "value": v, "label": l })).collect();
+        let items: Vec<Value> = self
+            .items
+            .iter()
+            .map(|(v, l)| json!({ "value": v, "label": l }))
+            .collect();
         json!({ "label": self.label, "items": items, "value": self.value, "interactive": self.interactive })
     }
 }
@@ -1426,27 +2104,61 @@ impl Code {
         }
     }
     /// Étiquette affichée au-dessus.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Langage pour la colorisation (`rust`, `python`, `javascript`, `json`, `markdown`).
-    pub fn language(mut self, l: impl Into<String>) -> Self { self.language = Some(l.into()); self }
+    pub fn language(mut self, l: impl Into<String>) -> Self {
+        self.language = Some(l.into());
+        self
+    }
     /// Contenu initial.
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
     /// Autorise l'édition (textarea transparent sur la colorisation).
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
     /// Thème (`auto`, `light`, `dark`).
-    pub fn theme(mut self, t: impl Into<String>) -> Self { self.theme = t.into(); self }
+    pub fn theme(mut self, t: impl Into<String>) -> Self {
+        self.theme = t.into();
+        self
+    }
     /// Affiche les numéros de ligne.
-    pub fn lines(mut self, on: bool) -> Self { self.line_numbers = on; self }
+    pub fn lines(mut self, on: bool) -> Self {
+        self.line_numbers = on;
+        self
+    }
     /// Déclare la zone **sortie** (lecture seule).
-    pub fn output(mut self) -> Self { self.out = true; self }
+    pub fn output(mut self) -> Self {
+        self.out = true;
+        self
+    }
     /// Déclare la zone **entrée** (édition — par défaut).
-    pub fn input(mut self) -> Self { self.out = false; self }
+    pub fn input(mut self) -> Self {
+        self.out = false;
+        self
+    }
 }
 
 impl Component for Code {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "code" }
-    fn role(&self) -> Role { if self.out { Role::Output } else { Role::Input } }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "code"
+    }
+    fn role(&self) -> Role {
+        if self.out {
+            Role::Output
+        } else {
+            Role::Input
+        }
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label, "language": self.language, "value": self.value,
@@ -1471,22 +2183,46 @@ pub struct Explorer {
 impl Explorer {
     /// Crée un explorateur, avec son identifiant.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), root: ".".to_string(), pattern: None, value: String::new() }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            root: ".".to_string(),
+            pattern: None,
+            value: String::new(),
+        }
     }
     /// Étiquette affichée au-dessus.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Dossier racine servi par le navigateur (côté serveur).
-    pub fn root(mut self, r: impl Into<String>) -> Self { self.root = r.into(); self }
+    pub fn root(mut self, r: impl Into<String>) -> Self {
+        self.root = r.into();
+        self
+    }
     /// Filtrer les fichiers (globe simple, ex. `*.rs`).
-    pub fn pattern(mut self, p: impl Into<String>) -> Self { self.pattern = Some(p.into()); self }
+    pub fn pattern(mut self, p: impl Into<String>) -> Self {
+        self.pattern = Some(p.into());
+        self
+    }
     /// Chemin sélectionné initialement (relatif à `root`).
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
 }
 
 impl Component for Explorer {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "explorer" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "explorer"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
         json!({ "label": self.label, "root": self.root, "pattern": self.pattern, "value": self.value })
     }
@@ -1504,15 +2240,24 @@ pub struct ChatMessage {
 impl ChatMessage {
     /// Crée un message utilisateur.
     pub fn user(content: impl Into<String>) -> Self {
-        Self { role: "user".into(), content: content.into() }
+        Self {
+            role: "user".into(),
+            content: content.into(),
+        }
     }
     /// Crée un message assistant (bot).
     pub fn assistant(content: impl Into<String>) -> Self {
-        Self { role: "assistant".into(), content: content.into() }
+        Self {
+            role: "assistant".into(),
+            content: content.into(),
+        }
     }
     /// Crée un message système.
     pub fn system(content: impl Into<String>) -> Self {
-        Self { role: "system".into(), content: content.into() }
+        Self {
+            role: "system".into(),
+            content: content.into(),
+        }
     }
 }
 
@@ -1541,24 +2286,45 @@ impl Chatbot {
         }
     }
     /// Étiquette affichée au-dessus de la fenêtre de chat.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Messages initiaux du chat.
-    pub fn messages(mut self, m: Vec<ChatMessage>) -> Self { self.messages = m; self }
+    pub fn messages(mut self, m: Vec<ChatMessage>) -> Self {
+        self.messages = m;
+        self
+    }
     /// Ajoute un message initial dans la conversation.
     pub fn message(mut self, role: impl Into<String>, content: impl Into<String>) -> Self {
-        self.messages.push(ChatMessage { role: role.into(), content: content.into() });
+        self.messages.push(ChatMessage {
+            role: role.into(),
+            content: content.into(),
+        });
         self
     }
     /// Hauteur en pixels du conteneur scrollable.
-    pub fn height(mut self, h: u32) -> Self { self.height = Some(h); self }
+    pub fn height(mut self, h: u32) -> Self {
+        self.height = Some(h);
+        self
+    }
     /// Texte indicatif quand l'historique est vide.
-    pub fn placeholder(mut self, p: impl Into<String>) -> Self { self.placeholder = p.into(); self }
+    pub fn placeholder(mut self, p: impl Into<String>) -> Self {
+        self.placeholder = p.into();
+        self
+    }
 }
 
 impl Component for Chatbot {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "chatbot" }
-    fn role(&self) -> Role { Role::Output }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "chatbot"
+    }
+    fn role(&self) -> Role {
+        Role::Output
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,
@@ -1593,21 +2359,42 @@ impl Metric {
         }
     }
     /// Titre / libellé de l'indicateur.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Valeur principale affichée en grand (ex: "48.5", "120ms").
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
     /// Variation / delta (ex: "+12.4%", "-20ms").
-    pub fn delta(mut self, d: impl Into<String>) -> Self { self.delta = Some(d.into()); self }
+    pub fn delta(mut self, d: impl Into<String>) -> Self {
+        self.delta = Some(d.into());
+        self
+    }
     /// Couleur sémantique du delta ("normal", "inverse", "off", ou code couleur).
-    pub fn delta_color(mut self, c: impl Into<String>) -> Self { self.delta_color = Some(c.into()); self }
+    pub fn delta_color(mut self, c: impl Into<String>) -> Self {
+        self.delta_color = Some(c.into());
+        self
+    }
     /// Unité de mesure affichée à côté de la valeur (ex: "tok/s", "MB", "req/s").
-    pub fn unit(mut self, u: impl Into<String>) -> Self { self.unit = Some(u.into()); self }
+    pub fn unit(mut self, u: impl Into<String>) -> Self {
+        self.unit = Some(u.into());
+        self
+    }
 }
 
 impl Component for Metric {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "metric" }
-    fn role(&self) -> Role { Role::Output }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "metric"
+    }
+    fn role(&self) -> Role {
+        Role::Output
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,
@@ -1650,25 +2437,52 @@ impl Number {
         }
     }
     /// Label displayed above the field.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Initial value.
-    pub fn value(mut self, v: f64) -> Self { self.value = v; self }
+    pub fn value(mut self, v: f64) -> Self {
+        self.value = v;
+        self
+    }
     /// Lower bound (default: `0`).
-    pub fn min(mut self, v: f64) -> Self { self.min = v; self }
+    pub fn min(mut self, v: f64) -> Self {
+        self.min = v;
+        self
+    }
     /// Upper bound (default: `1e6`).
-    pub fn max(mut self, v: f64) -> Self { self.max = v; self }
+    pub fn max(mut self, v: f64) -> Self {
+        self.max = v;
+        self
+    }
     /// Stepper increment (default: `1`).
-    pub fn step(mut self, v: f64) -> Self { self.step = v; self }
+    pub fn step(mut self, v: f64) -> Self {
+        self.step = v;
+        self
+    }
     /// Unit shown next to the value (e.g. `"€"`, `"ms"`).
-    pub fn unit(mut self, u: impl Into<String>) -> Self { self.unit = u.into(); self }
+    pub fn unit(mut self, u: impl Into<String>) -> Self {
+        self.unit = u.into();
+        self
+    }
     /// Enables or disables editing (frozen if `false`).
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
 }
 
 impl Component for Number {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "number" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "number"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label, "value": self.value, "min": self.min,
@@ -1692,22 +2506,46 @@ pub struct Label {
 impl Label {
     /// Creates a label with its identifier. Output by default.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), value: String::new(), variant: "normal".into(), size: 26 }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: String::new(),
+            variant: "normal".into(),
+            size: 26,
+        }
     }
     /// Title shown above the value.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Initial value.
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
     /// Semantic color: `normal`, `success`, `warning`, `danger` or `off`.
-    pub fn variant(mut self, v: impl Into<String>) -> Self { self.variant = v.into(); self }
+    pub fn variant(mut self, v: impl Into<String>) -> Self {
+        self.variant = v.into();
+        self
+    }
     /// Font size of the value in pixels (default: `26`).
-    pub fn size(mut self, px: u32) -> Self { self.size = px; self }
+    pub fn size(mut self, px: u32) -> Self {
+        self.size = px;
+        self
+    }
 }
 
 impl Component for Label {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "label" }
-    fn role(&self) -> Role { Role::Output }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "label"
+    }
+    fn role(&self) -> Role {
+        Role::Output
+    }
     fn props(&self) -> Value {
         json!({ "label": self.label, "value": self.value, "variant": self.variant, "size": self.size })
     }
@@ -1728,29 +2566,62 @@ pub struct Json {
 impl Json {
     /// Creates a JSON component with its identifier. Editor by default.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), value: Value::Null, interactive: true, out: false }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: Value::Null,
+            interactive: true,
+            out: false,
+        }
     }
     /// Label displayed above.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Initial JSON value (object, array or scalar).
-    pub fn value(mut self, v: Value) -> Self { self.value = v; self }
+    pub fn value(mut self, v: Value) -> Self {
+        self.value = v;
+        self
+    }
     /// Initial value from a JSON string (ignored when not parseable).
     pub fn value_str(mut self, s: &str) -> Self {
-        if let Ok(v) = serde_json::from_str(s) { self.value = v; }
+        if let Ok(v) = serde_json::from_str(s) {
+            self.value = v;
+        }
         self
     }
     /// Enables or disables editing (read-only if `false`).
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
     /// Declares the component **output** (plain viewer).
-    pub fn output(mut self) -> Self { self.out = true; self }
+    pub fn output(mut self) -> Self {
+        self.out = true;
+        self
+    }
     /// Declares the component **input** (editor — default).
-    pub fn input(mut self) -> Self { self.out = false; self }
+    pub fn input(mut self) -> Self {
+        self.out = false;
+        self
+    }
 }
 
 impl Component for Json {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "json" }
-    fn role(&self) -> Role { if self.out { Role::Output } else { Role::Input } }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "json"
+    }
+    fn role(&self) -> Role {
+        if self.out {
+            Role::Output
+        } else {
+            Role::Input
+        }
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label, "value": self.value, "interactive": self.interactive
@@ -1773,20 +2644,40 @@ pub struct Timer {
 impl Timer {
     /// Creates a timer with its identifier. Output by default.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), interval: 1.0, running: true }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            interval: 1.0,
+            running: true,
+        }
     }
     /// Label displayed.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Tick interval in seconds (default: `1`).
-    pub fn interval(mut self, s: f64) -> Self { self.interval = s.max(0.05); self }
+    pub fn interval(mut self, s: f64) -> Self {
+        self.interval = s.max(0.05);
+        self
+    }
     /// Starts the timer on mount (default: `true`).
-    pub fn running(mut self, on: bool) -> Self { self.running = on; self }
+    pub fn running(mut self, on: bool) -> Self {
+        self.running = on;
+        self
+    }
 }
 
 impl Component for Timer {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "timer" }
-    fn role(&self) -> Role { Role::Output }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "timer"
+    }
+    fn role(&self) -> Role {
+        Role::Output
+    }
     fn props(&self) -> Value {
         json!({ "label": self.label, "interval": self.interval, "running": self.running })
     }
@@ -1816,27 +2707,52 @@ pub struct File {
 impl File {
     /// Creates a file component with its identifier. Input by default.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), multiple: true, types: Vec::new(), max_size: 0, interactive: true }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            multiple: true,
+            types: Vec::new(),
+            max_size: 0,
+            interactive: true,
+        }
     }
     /// Label displayed above.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Allows multi-file selection (default: `true`).
-    pub fn multiple(mut self, on: bool) -> Self { self.multiple = on; self }
+    pub fn multiple(mut self, on: bool) -> Self {
+        self.multiple = on;
+        self
+    }
     /// Accepted MIME types (default: any). E.g. `&["image/*", "application/pdf"]`.
     pub fn types(mut self, t: &[&str]) -> Self {
         self.types = t.iter().map(|s| s.to_string()).collect();
         self
     }
     /// Maximum size per file in bytes (`0` = unlimited, default).
-    pub fn max_size(mut self, n: u64) -> Self { self.max_size = n; self }
+    pub fn max_size(mut self, n: u64) -> Self {
+        self.max_size = n;
+        self
+    }
     /// Enables or disables upload (read-only list if `false`).
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
 }
 
 impl Component for File {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "file" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "file"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label, "multiple": self.multiple, "types": self.types,
@@ -1859,20 +2775,40 @@ pub struct DownloadButton {
 impl DownloadButton {
     /// Creates a download button with its identifier. Output.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new(), filename: "download.bin".into(), value: String::new() }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            filename: "download.bin".into(),
+            value: String::new(),
+        }
     }
     /// Button label.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Suggested download filename (default: `download.bin`).
-    pub fn filename(mut self, n: impl Into<String>) -> Self { self.filename = n.into(); self }
+    pub fn filename(mut self, n: impl Into<String>) -> Self {
+        self.filename = n.into();
+        self
+    }
     /// Initial content as a data URL (or bare base64 → normalized at render).
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
 }
 
 impl Component for DownloadButton {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "download" }
-    fn role(&self) -> Role { Role::Output }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "download"
+    }
+    fn role(&self) -> Role {
+        Role::Output
+    }
     fn props(&self) -> Value {
         json!({ "label": self.label, "filename": self.filename, "value": self.value })
     }
@@ -1908,7 +2844,10 @@ impl Radio {
         }
     }
     /// Label displayed above the options.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Sets the list of selectable options from string slices.
     pub fn choices(mut self, c: &[&str]) -> Self {
         self.choices = c.iter().map(|s| s.to_string()).collect();
@@ -1926,19 +2865,37 @@ impl Radio {
         self
     }
     /// Initial selected value.
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
     /// Layout direction (`"horizontal"` or `"vertical"`). Default is `"horizontal"`.
-    pub fn direction(mut self, d: impl Into<String>) -> Self { self.direction = d.into(); self }
+    pub fn direction(mut self, d: impl Into<String>) -> Self {
+        self.direction = d.into();
+        self
+    }
     /// Visual presentation (`"pills"` or `"radio"`). Default is `"pills"`.
-    pub fn style(mut self, s: impl Into<String>) -> Self { self.style = s.into(); self }
+    pub fn style(mut self, s: impl Into<String>) -> Self {
+        self.style = s.into();
+        self
+    }
     /// Enables or disables user interaction.
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
 }
 
 impl Component for Radio {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "radio" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "radio"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,
@@ -1983,25 +2940,52 @@ impl SliderRange {
         }
     }
     /// Label displayed above the range slider.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Lower bound.
-    pub fn min(mut self, m: f64) -> Self { self.min = m; self }
+    pub fn min(mut self, m: f64) -> Self {
+        self.min = m;
+        self
+    }
     /// Upper bound.
-    pub fn max(mut self, m: f64) -> Self { self.max = m; self }
+    pub fn max(mut self, m: f64) -> Self {
+        self.max = m;
+        self
+    }
     /// Step resolution.
-    pub fn step(mut self, s: f64) -> Self { self.step = s; self }
+    pub fn step(mut self, s: f64) -> Self {
+        self.step = s;
+        self
+    }
     /// Initial range `(low, high)`.
-    pub fn value(mut self, low: f64, high: f64) -> Self { self.value = (low, high); self }
+    pub fn value(mut self, low: f64, high: f64) -> Self {
+        self.value = (low, high);
+        self
+    }
     /// Optional unit symbol displayed alongside values (e.g. `"%"`, `"px"`, `"s"`).
-    pub fn unit(mut self, u: impl Into<String>) -> Self { self.unit = u.into(); self }
+    pub fn unit(mut self, u: impl Into<String>) -> Self {
+        self.unit = u.into();
+        self
+    }
     /// Enables or disables user interaction.
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
 }
 
 impl Component for SliderRange {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "sliderrange" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "sliderrange"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,
@@ -2050,24 +3034,42 @@ impl ColorPicker {
         }
     }
     /// Label displayed above the color picker.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Initial hex color code.
-    pub fn value(mut self, hex: impl Into<String>) -> Self { self.value = hex.into(); self }
+    pub fn value(mut self, hex: impl Into<String>) -> Self {
+        self.value = hex.into();
+        self
+    }
     /// Quick preset colors from string slices.
     pub fn presets(mut self, p: &[&str]) -> Self {
         self.presets = p.iter().map(|s| s.to_string()).collect();
         self
     }
     /// Quick preset colors from owned `String`s.
-    pub fn presets_str(mut self, p: Vec<String>) -> Self { self.presets = p; self }
+    pub fn presets_str(mut self, p: Vec<String>) -> Self {
+        self.presets = p;
+        self
+    }
     /// Enables or disables user interaction.
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
 }
 
 impl Component for ColorPicker {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "colorpicker" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "colorpicker"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,
@@ -2116,10 +3118,17 @@ impl AnnotatedImage {
         }
     }
     /// Label displayed above the image viewer.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Base background image URL or data URL.
-    pub fn image(mut self, img: impl Into<String>) -> Self { self.image = img.into(); self }
+    pub fn image(mut self, img: impl Into<String>) -> Self {
+        self.image = img.into();
+        self
+    }
     /// Adds a normalized bounding box `[ymin, xmin, ymax, xmax]` with label, score and color.
+    #[allow(clippy::too_many_arguments)]
     pub fn box_norm(
         mut self,
         ymin: f64,
@@ -2139,7 +3148,10 @@ impl AnnotatedImage {
         self
     }
     /// Sets the full list of bounding boxes.
-    pub fn boxes(mut self, b: Vec<BoundingBox>) -> Self { self.boxes = b; self }
+    pub fn boxes(mut self, b: Vec<BoundingBox>) -> Self {
+        self.boxes = b;
+        self
+    }
     /// Sets full JSON data: `{ "image": "...", "boxes": [...] }`.
     pub fn data<T: serde::Serialize>(mut self, d: &T) -> Self {
         if let Ok(v) = serde_json::to_value(d) {
@@ -2147,7 +3159,8 @@ impl AnnotatedImage {
                 self.image = img.to_string();
             }
             if let Some(arr) = v.get("boxes").and_then(|x| x.as_array()) {
-                if let Ok(b) = serde_json::from_value::<Vec<BoundingBox>>(Value::Array(arr.clone())) {
+                if let Ok(b) = serde_json::from_value::<Vec<BoundingBox>>(Value::Array(arr.clone()))
+                {
                     self.boxes = b;
                 }
             }
@@ -2155,15 +3168,27 @@ impl AnnotatedImage {
         self
     }
     /// Shows or hides class label badges on boxes.
-    pub fn show_labels(mut self, on: bool) -> Self { self.show_labels = on; self }
+    pub fn show_labels(mut self, on: bool) -> Self {
+        self.show_labels = on;
+        self
+    }
     /// Shows or hides percentage confidence scores.
-    pub fn show_scores(mut self, on: bool) -> Self { self.show_scores = on; self }
+    pub fn show_scores(mut self, on: bool) -> Self {
+        self.show_scores = on;
+        self
+    }
 }
 
 impl Component for AnnotatedImage {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "annotatedimage" }
-    fn role(&self) -> Role { Role::Output }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "annotatedimage"
+    }
+    fn role(&self) -> Role {
+        Role::Output
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,
@@ -2202,7 +3227,10 @@ impl ImageComparison {
         }
     }
     /// Label displayed above the comparison viewer.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Sets before image URL and optional badge label.
     pub fn before(mut self, img: impl Into<String>, label: impl Into<String>) -> Self {
         self.before = img.into();
@@ -2223,9 +3251,15 @@ impl ImageComparison {
 }
 
 impl Component for ImageComparison {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "imagecomparison" }
-    fn role(&self) -> Role { Role::Output }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "imagecomparison"
+    }
+    fn role(&self) -> Role {
+        Role::Output
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,
@@ -2261,17 +3295,32 @@ impl AudioRecorder {
         }
     }
     /// Label displayed above the recorder.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Maximum recording duration in seconds (default `60.0`).
-    pub fn max_duration(mut self, d: f64) -> Self { self.max_duration = d; self }
+    pub fn max_duration(mut self, d: f64) -> Self {
+        self.max_duration = d;
+        self
+    }
     /// Enables or disables recording interaction.
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
 }
 
 impl Component for AudioRecorder {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "audiorecorder" }
-    fn role(&self) -> Role { Role::Input }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "audiorecorder"
+    }
+    fn role(&self) -> Role {
+        Role::Input
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,
@@ -2313,7 +3362,10 @@ impl HighlightedText {
         }
     }
     /// Label displayed above the highlighted text.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Appends a segment with an optional category tag.
     pub fn segment(mut self, text: impl Into<String>, label: Option<&str>) -> Self {
         self.segments.push(TextSegment {
@@ -2341,13 +3393,15 @@ impl HighlightedText {
                     .iter()
                     .filter_map(|item| {
                         if let Some(pair) = item.as_array() {
-                            let text = pair.get(0).and_then(|x| x.as_str()).unwrap_or("").to_string();
+                            let text = pair
+                                .first()
+                                .and_then(|x| x.as_str())
+                                .unwrap_or("")
+                                .to_string();
                             let label = pair.get(1).and_then(|x| x.as_str()).map(|s| s.to_string());
                             Some(TextSegment { text, label })
-                        } else if let Ok(ts) = serde_json::from_value::<TextSegment>(item.clone()) {
-                            Some(ts)
                         } else {
-                            None
+                            serde_json::from_value::<TextSegment>(item.clone()).ok()
                         }
                     })
                     .collect();
@@ -2357,17 +3411,29 @@ impl HighlightedText {
     }
     /// Assigns specific hex colors for labels, e.g. `&[("PER", "#10b981"), ("ORG", "#6366f1")]`.
     pub fn color_map(mut self, map: &[(&str, &str)]) -> Self {
-        self.color_map = map.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        self.color_map = map
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
         self
     }
     /// Shows or hides the color legend bar above the text.
-    pub fn show_legend(mut self, on: bool) -> Self { self.show_legend = on; self }
+    pub fn show_legend(mut self, on: bool) -> Self {
+        self.show_legend = on;
+        self
+    }
 }
 
 impl Component for HighlightedText {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "highlightedtext" }
-    fn role(&self) -> Role { Role::Output }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "highlightedtext"
+    }
+    fn role(&self) -> Role {
+        Role::Output
+    }
     fn props(&self) -> Value {
         let colors: serde_json::Map<String, Value> = self
             .color_map
@@ -2408,21 +3474,42 @@ impl CodeDiff {
         }
     }
     /// Label displayed above the diff viewer.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Base original code string.
-    pub fn old_code(mut self, s: impl Into<String>) -> Self { self.old_code = s.into(); self }
+    pub fn old_code(mut self, s: impl Into<String>) -> Self {
+        self.old_code = s.into();
+        self
+    }
     /// Updated / proposed new code string.
-    pub fn new_code(mut self, s: impl Into<String>) -> Self { self.new_code = s.into(); self }
+    pub fn new_code(mut self, s: impl Into<String>) -> Self {
+        self.new_code = s.into();
+        self
+    }
     /// Programming language tag for styling.
-    pub fn language(mut self, lang: impl Into<String>) -> Self { self.language = lang.into(); self }
+    pub fn language(mut self, lang: impl Into<String>) -> Self {
+        self.language = lang.into();
+        self
+    }
     /// Enables split view (side-by-side) instead of unified diff.
-    pub fn split_view(mut self, on: bool) -> Self { self.split_view = on; self }
+    pub fn split_view(mut self, on: bool) -> Self {
+        self.split_view = on;
+        self
+    }
 }
 
 impl Component for CodeDiff {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "codediff" }
-    fn role(&self) -> Role { Role::Output }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "codediff"
+    }
+    fn role(&self) -> Role {
+        Role::Output
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,
@@ -2457,19 +3544,37 @@ impl Model3D {
         }
     }
     /// Label displayed above the 3D viewer.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// 3D model data (raw OBJ string or data URL).
-    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = v.into();
+        self
+    }
     /// Background clear color hex code.
-    pub fn clear_color(mut self, hex: impl Into<String>) -> Self { self.clear_color = hex.into(); self }
+    pub fn clear_color(mut self, hex: impl Into<String>) -> Self {
+        self.clear_color = hex.into();
+        self
+    }
     /// Enables mouse rotation and zoom controls.
-    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+    pub fn interactive(mut self, on: bool) -> Self {
+        self.interactive = on;
+        self
+    }
 }
 
 impl Component for Model3D {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "model3d" }
-    fn role(&self) -> Role { Role::Output }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "model3d"
+    }
+    fn role(&self) -> Role {
+        Role::Output
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,
@@ -2504,19 +3609,41 @@ impl Html {
         }
     }
     /// Optional label displayed above the custom HTML container.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
     /// Raw HTML string content.
-    pub fn value(mut self, h: impl Into<String>) -> Self { self.value = h.into(); self }
+    pub fn value(mut self, h: impl Into<String>) -> Self {
+        self.value = h.into();
+        self
+    }
     /// Declares the component as **Input** (value emitted on change).
-    pub fn input(mut self) -> Self { self.out = false; self }
+    pub fn input(mut self) -> Self {
+        self.out = false;
+        self
+    }
     /// Declares the component as **Output** (default, viewer).
-    pub fn output(mut self) -> Self { self.out = true; self }
+    pub fn output(mut self) -> Self {
+        self.out = true;
+        self
+    }
 }
 
 impl Component for Html {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "html" }
-    fn role(&self) -> Role { if self.out { Role::Output } else { Role::Input } }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "html"
+    }
+    fn role(&self) -> Role {
+        if self.out {
+            Role::Output
+        } else {
+            Role::Input
+        }
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,
@@ -2587,7 +3714,10 @@ impl Map {
     }
 
     /// Label displayed above the map.
-    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    pub fn label(mut self, l: impl Into<String>) -> Self {
+        self.label = l.into();
+        self
+    }
 
     /// Sets the initial map center coordinates [latitude, longitude].
     pub fn center(mut self, lat: f64, lon: f64) -> Self {
@@ -2603,7 +3733,13 @@ impl Map {
     }
 
     /// Adds a marker with coordinates, label, and optional accent color.
-    pub fn marker(mut self, lat: f64, lon: f64, label: impl Into<String>, color: Option<&str>) -> Self {
+    pub fn marker(
+        mut self,
+        lat: f64,
+        lon: f64,
+        label: impl Into<String>,
+        color: Option<&str>,
+    ) -> Self {
         self.markers.push(MapMarker {
             lat,
             lon,
@@ -2615,7 +3751,14 @@ impl Map {
     }
 
     /// Adds a marker with an explicit ID for event identification.
-    pub fn marker_with_id(mut self, id: impl Into<String>, lat: f64, lon: f64, label: impl Into<String>, color: Option<&str>) -> Self {
+    pub fn marker_with_id(
+        mut self,
+        id: impl Into<String>,
+        lat: f64,
+        lon: f64,
+        label: impl Into<String>,
+        color: Option<&str>,
+    ) -> Self {
         self.markers.push(MapMarker {
             lat,
             lon,
@@ -2650,15 +3793,31 @@ impl Map {
     }
 
     /// Declares the component as **Input** (emits click coordinate snapshots).
-    pub fn input(mut self) -> Self { self.out = false; self }
+    pub fn input(mut self) -> Self {
+        self.out = false;
+        self
+    }
     /// Declares the component as **Output** (default, viewer).
-    pub fn output(mut self) -> Self { self.out = true; self }
+    pub fn output(mut self) -> Self {
+        self.out = true;
+        self
+    }
 }
 
 impl Component for Map {
-    fn id(&self) -> &str { &self.id }
-    fn kind(&self) -> &'static str { "map" }
-    fn role(&self) -> Role { if self.out { Role::Output } else { Role::Input } }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn kind(&self) -> &'static str {
+        "map"
+    }
+    fn role(&self) -> Role {
+        if self.out {
+            Role::Output
+        } else {
+            Role::Input
+        }
+    }
     fn props(&self) -> Value {
         json!({
             "label": self.label,

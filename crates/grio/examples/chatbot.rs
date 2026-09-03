@@ -1,11 +1,10 @@
+use grio::*;
 use std::thread;
 use std::time::Duration;
-use grio::*;
 
 fn main() -> grio::Result<()> {
     App::new("Chatbot LLM · grio demo")
         .subtitle("Démonstration d'interface conversationnelle IA avec bulles de messages et streaming temps réel (token par token).")
-        
         .item(
             Chatbot::new("chat")
                 .label("Assistant IA (Llama / Rust)")

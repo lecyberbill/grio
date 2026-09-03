@@ -1,4 +1,10 @@
 # ⚙️ grio — A Blazing Fast, Pure Rust Alternative to Gradio
+
+[![CI](https://github.com/lecyberbill/grio/actions/workflows/ci.yml/badge.svg)](https://github.com/lecyberbill/grio/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Rust: 2021](https://img.shields.io/badge/Rust-2021_Edition-orange.svg)](https://www.rust-lang.org)
+[![Documentation](https://img.shields.io/badge/docs.rs-grio-green.svg)](https://docs.rs)
+
 <img width="1291" height="1170" alt="image" src="https://github.com/user-attachments/assets/cb03e11b-4856-413f-9ca8-facab0de9e4f" />
 
 <img width="1934" height="1189" alt="image" src="https://github.com/user-attachments/assets/ad39a3aa-a124-4523-b253-409518b12347" />

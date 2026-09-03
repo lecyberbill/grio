@@ -325,18 +325,40 @@ impl App {
 
 fn showcase_submit(ctx: &mut Context) -> Result<()> {
     let mut out = String::from("=== SHOWCASE SUBMISSION RESULT ===\n\n");
-    if let Ok(t) = ctx.get::<String>("sc_text") { out.push_str(&format!("• Text: {t}\n")); }
-    if let Ok(n) = ctx.get::<f64>("num_items") { out.push_str(&format!("• Item count: {n}\n")); }
-    if let Ok(s) = ctx.get::<f64>("sc_slider") { out.push_str(&format!("• Slider: {s}\n")); }
-    if let Ok(r) = ctx.get::<(f64, f64)>("sc_range") { out.push_str(&format!("• SliderRange bounds: [{:.1}, {:.1}]\n", r.0, r.1)); }
-    if let Ok(pills) = ctx.get::<String>("sc_radio_pills") { out.push_str(&format!("• Architecture (pills): {pills}\n")); }
-    if let Ok(rad) = ctx.get::<String>("sc_radio_classic") { out.push_str(&format!("• Precision (radio): {rad}\n")); }
-    if let Ok(drop) = ctx.get::<String>("sc_dropdown") { out.push_str(&format!("• Dropdown: {drop}\n")); }
-    if let Ok(chk) = ctx.get::<bool>("sc_check") { out.push_str(&format!("• GPU Acceleration: {chk}\n")); }
-    if let Ok(col) = ctx.get::<String>("sc_color") { out.push_str(&format!("• Chosen color: {col}\n")); }
-    if let Ok(sort) = ctx.get::<Vec<String>>("sc_sortable") { out.push_str(&format!("• SortableList order: {:?}\n", sort)); }
-    if let Ok(j) = ctx.get::<serde_json::Value>("sc_json") { out.push_str(&format!("• Valid JSON: {}\n", j)); }
-    
+    if let Ok(t) = ctx.get::<String>("sc_text") {
+        out.push_str(&format!("• Text: {t}\n"));
+    }
+    if let Ok(n) = ctx.get::<f64>("num_items") {
+        out.push_str(&format!("• Item count: {n}\n"));
+    }
+    if let Ok(s) = ctx.get::<f64>("sc_slider") {
+        out.push_str(&format!("• Slider: {s}\n"));
+    }
+    if let Ok(r) = ctx.get::<(f64, f64)>("sc_range") {
+        out.push_str(&format!("• SliderRange bounds: [{:.1}, {:.1}]\n", r.0, r.1));
+    }
+    if let Ok(pills) = ctx.get::<String>("sc_radio_pills") {
+        out.push_str(&format!("• Architecture (pills): {pills}\n"));
+    }
+    if let Ok(rad) = ctx.get::<String>("sc_radio_classic") {
+        out.push_str(&format!("• Precision (radio): {rad}\n"));
+    }
+    if let Ok(drop) = ctx.get::<String>("sc_dropdown") {
+        out.push_str(&format!("• Dropdown: {drop}\n"));
+    }
+    if let Ok(chk) = ctx.get::<bool>("sc_check") {
+        out.push_str(&format!("• GPU Acceleration: {chk}\n"));
+    }
+    if let Ok(col) = ctx.get::<String>("sc_color") {
+        out.push_str(&format!("• Chosen color: {col}\n"));
+    }
+    if let Ok(sort) = ctx.get::<Vec<String>>("sc_sortable") {
+        out.push_str(&format!("• SortableList order: {:?}\n", sort));
+    }
+    if let Ok(j) = ctx.get::<serde_json::Value>("sc_json") {
+        out.push_str(&format!("• Valid JSON: {}\n", j));
+    }
+
     ctx.set("sc_summary", out);
     ctx.alert(AlertLevel::Success, "Complete submission recorded!");
     Ok(())

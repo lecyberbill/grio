@@ -16,7 +16,7 @@ fn main() -> grio::Result<()> {
         // À chaque fragment de micro live : lecture des stats serveur + mise
         // à jour de la sortie. Flux déclaré sur le handler `on_stream`.
         .on_stream("mic_in", |ctx| {
-            if let Some(s) = ctx.get::<StreamInfo>("mic_in").ok() {
+            if let Ok(s) = ctx.get::<StreamInfo>("mic_in") {
                 ctx.set("stats_out", format!("micro : {} · {} · {} fragments", s.mime, s.kb(), s.chunks));
                 if s.chunks % 5 == 0 {
                     ctx.alert(AlertLevel::Info, format!("micro live : {} ({})", s.kb(), s.mime));
@@ -71,18 +71,30 @@ fn main() -> grio::Result<()> {
 fn analyze(ctx: &mut grio::Context) -> grio::Result<()> {
     use grio::*;
 
-    let img = ctx.get_str("img_in").filter(|s| !s.is_empty()).map(str::to_string);
+    let img = ctx
+        .get_str("img_in")
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
     match img {
         Some(raw) => {
-            ctx.set("facts_out", format!("image reçue : data URL de {} octets", raw.len()));
+            ctx.set(
+                "facts_out",
+                format!("image reçue : data URL de {} octets", raw.len()),
+            );
             if let Some(info) = grio::media::inspect(&raw) {
                 let dims = match (info.width, info.height) {
                     (Some(w), Some(h)) => format!("{w}x{h}"),
                     _ => "inconnues".to_string(),
                 };
-                ctx.append("facts_out", format!(
-                    "\n  -> {} · {} · {dims} · {} octets", info.kind(), info.mime, info.size_bytes
-                ));
+                ctx.append(
+                    "facts_out",
+                    format!(
+                        "\n  -> {} · {} · {dims} · {} octets",
+                        info.kind(),
+                        info.mime,
+                        info.size_bytes
+                    ),
+                );
                 ctx.alert(AlertLevel::Success, format!("image {}", info.kind()));
             } else {
                 ctx.append("facts_out", "\n  -> format non reconnu");
@@ -93,7 +105,10 @@ fn analyze(ctx: &mut grio::Context) -> grio::Result<()> {
 
     let cam = ctx.get::<Option<StreamInfo>>("cam_in").ok().flatten();
     match cam {
-        Some(s) => ctx.set("cam_stats", format!("caméra : {} · {} · {} fragments", s.mime, s.kb(), s.chunks)),
+        Some(s) => ctx.set(
+            "cam_stats",
+            format!("caméra : {} · {} · {} fragments", s.mime, s.kb(), s.chunks),
+        ),
         None => ctx.set("cam_stats", "caméra : aucun flux actif"),
     }
     Ok(())

@@ -78,7 +78,11 @@ impl StudioConfig {
                 }
                 if let Some((k, v)) = trimmed.split_once('=') {
                     let key = k.trim();
-                    let val = v.trim().trim_matches('"').trim_matches('\'').replace("\\\\", "\\");
+                    let val = v
+                        .trim()
+                        .trim_matches('"')
+                        .trim_matches('\'')
+                        .replace("\\\\", "\\");
                     match key {
                         "gguf_path" => cfg.gguf_path = val,
                         "tokenizer_path" => cfg.tokenizer_path = val,
@@ -131,8 +135,24 @@ fn main() -> grio::Result<()> {
         sdxl_name: String::new(),
         sdxl_size_gb: 0.0,
         history: vec![
-            ExecutionRecord { id: 1, pipeline: "LLM Prompt".into(), model: "Qwen2.5-7B-Instruct (Q4_K_M)".into(), latency_sec: 1.82, throughput_str: "34.2 tok/s".into(), vram_gb: 4.68, status: "Success".into() },
-            ExecutionRecord { id: 2, pipeline: "SDXL Diffuser".into(), model: "Juggernaut-XL v9 (fp16)".into(), latency_sec: 29.10, throughput_str: "0.96 it/s".into(), vram_gb: 6.62, status: "Success".into() },
+            ExecutionRecord {
+                id: 1,
+                pipeline: "LLM Prompt".into(),
+                model: "Qwen2.5-7B-Instruct (Q4_K_M)".into(),
+                latency_sec: 1.82,
+                throughput_str: "34.2 tok/s".into(),
+                vram_gb: 4.68,
+                status: "Success".into(),
+            },
+            ExecutionRecord {
+                id: 2,
+                pipeline: "SDXL Diffuser".into(),
+                model: "Juggernaut-XL v9 (fp16)".into(),
+                latency_sec: 29.10,
+                throughput_str: "0.96 it/s".into(),
+                vram_gb: 6.62,
+                status: "Success".into(),
+            },
         ],
         tps_history: vec![34.2],
     }));
@@ -144,16 +164,25 @@ fn main() -> grio::Result<()> {
         while let Some(Ok(entry)) = entries.next() {
             let path = entry.path();
             if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                if matches!(ext.to_lowercase().as_str(), "png" | "jpg" | "jpeg" | "webp" | "svg") {
-                    let mtime = entry.metadata().and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                if matches!(
+                    ext.to_lowercase().as_str(),
+                    "png" | "jpg" | "jpeg" | "webp" | "svg"
+                ) {
+                    let mtime = entry
+                        .metadata()
+                        .and_then(|m| m.modified())
+                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
                     files.push((path, mtime));
                 }
             }
         }
-        files.sort_by(|a, b| b.1.cmp(&a.1));
+        files.sort_by_key(|b| std::cmp::Reverse(b.1));
         for (path, _) in files {
             if let Ok(bytes) = fs::read(&path) {
-                let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("image.png");
+                let filename = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("image.png");
                 let b64 = format!("data:image/png;base64,{}", base64_encode(&bytes));
                 initial_gallery_items.push(json!({
                     "image": b64,
@@ -303,14 +332,14 @@ fn main() -> grio::Result<()> {
                                         .lines(2)
                                         .value("ugly, deformed, disfigured, poor details, bad anatomy, bad eyes, blurry, watermark, low quality, cartoon, 3d render, extra limbs")
                                 );
-                                
+
                                 p.row(|r_sub| {
                                     r_sub.item(Dropdown::new("checkpoint").label("Checkpoint Model").options(&[
                                         "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors",
                                         "DreamShaperXL_Turbo_v2_1.safetensors",
                                         "realvisxlV50_v50LightningBakedvae.safetensors"
                                     ]).value("Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors"));
-                                    
+
                                     r_sub.item(Dropdown::new("aspect_ratio").label("Aspect Ratio").options(&[
                                         "1024x1024 (Square 1:1)",
                                         "1280x768 (Landscape 16:9)",
@@ -510,15 +539,15 @@ fn main() -> grio::Result<()> {
             let tokenizer = match Tokenizer::from_file(&tok_path) {
                 Ok(t) => t,
                 Err(e) => {
-                    ctx.alert(AlertLevel::Error, format!("Failed to load tokenizer from `{tok_path}`: {e}"));
+                    ctx.alert(AlertLevel::Error, format!("Failed to load tokenizer: {e}"));
                     return Ok(());
                 }
             };
 
             // Read GGUF content & inspect metadata architecture
-            let mut file = File::open(&gguf_path).map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))?;
-            let content = gguf_file::Content::read(&mut file).map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))?;
-            
+            let mut file = File::open(&gguf_path).map_err(Box::<dyn std::error::Error + Send + Sync>::from)?;
+            let content = gguf_file::Content::read(&mut file).map_err(Box::<dyn std::error::Error + Send + Sync>::from)?;
+
             let arch = content.metadata.get("general.architecture")
                 .and_then(|v| v.to_string().ok())
                 .cloned()
@@ -640,12 +669,12 @@ fn main() -> grio::Result<()> {
             let file = match File::open(&ckpt_path) {
                 Ok(f) => f,
                 Err(e) => {
-                    ctx.alert(AlertLevel::Error, format!("Failed to open `{ckpt_name}`: {e}"));
+                    ctx.alert(AlertLevel::Error, format!("Failed to open: {e}"));
                     return Ok(());
                 }
             };
 
-            let metadata = file.metadata().map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))?;
+            let metadata = file.metadata().map_err(Box::<dyn std::error::Error + Send + Sync>::from)?;
             let size_gb = metadata.len() as f64 / (1024.0 * 1024.0 * 1024.0);
             let elapsed = start.elapsed().as_secs_f64();
 
@@ -696,7 +725,7 @@ fn main() -> grio::Result<()> {
 
             // Real forward pass execution
             let mut eng = engine_chat.lock().unwrap_or_else(|p| p.into_inner());
-            
+
             // Auto-load if needed
             if eng.llm_model.is_none() {
                 let gguf_path = eng.config.gguf_path.clone();
@@ -799,7 +828,7 @@ fn main() -> grio::Result<()> {
                     }
                 }
             } else {
-                full_response = format!("⚠️ Model weights not loaded. Please click '⚡ Load Real ModelWeights' first.");
+                full_response = "⚠️ Model weights not loaded. Please click '⚡ Load Real ModelWeights' first.".to_string();
                 ctx.append("chat", &full_response);
             }
 
@@ -956,22 +985,20 @@ fn main() -> grio::Result<()> {
             // Stream latent preview frames from child stdout
             if let Some(stdout) = child.stdout.take() {
                 let reader = BufReader::new(stdout);
-                for line_res in reader.lines() {
-                    if let Ok(line) = line_res {
-                        if line.starts_with("__LATENT_PREVIEW__:") {
-                            let parts: Vec<&str> = line.trim_start_matches("__LATENT_PREVIEW__:").splitn(2, ':').collect();
-                            if parts.len() == 2 {
-                                let step_info = parts[0];
-                                let b64 = parts[1];
-                                let data_url = format!("data:image/jpeg;base64,{b64}");
-                                ctx.set("latent_preview", data_url);
+                for line in reader.lines().map_while(std::result::Result::ok) {
+                    if line.starts_with("__LATENT_PREVIEW__:") {
+                        let parts: Vec<&str> = line.trim_start_matches("__LATENT_PREVIEW__:").splitn(2, ':').collect();
+                        if parts.len() == 2 {
+                            let step_info = parts[0];
+                            let b64 = parts[1];
+                            let data_url = format!("data:image/jpeg;base64,{b64}");
+                            ctx.set("latent_preview", data_url);
 
-                                let step_parts: Vec<&str> = step_info.split('/').collect();
-                                if step_parts.len() == 2 {
-                                    if let (Ok(cur), Ok(total)) = (step_parts[0].parse::<f64>(), step_parts[1].parse::<f64>()) {
-                                        let pct = (cur / total).clamp(0.0, 1.0);
-                                        ctx.progress("gen_progress", pct, format!("Denoising step {}/{} (Latent Live)...", step_parts[0], step_parts[1]));
-                                    }
+                            let step_parts: Vec<&str> = step_info.split('/').collect();
+                            if step_parts.len() == 2 {
+                                if let (Ok(cur), Ok(total)) = (step_parts[0].parse::<f64>(), step_parts[1].parse::<f64>()) {
+                                    let pct = (cur / total).clamp(0.0, 1.0);
+                                    ctx.progress("gen_progress", pct, format!("Denoising step {}/{} (Latent Live)...", step_parts[0], step_parts[1]));
                                 }
                             }
                         }
@@ -1071,8 +1098,10 @@ fn generate_cinematic_image(prompt: &str, seed: u64, width: u32, height: u32) ->
     let mut img = image::RgbImage::new(width, height);
     let p_lower = prompt.to_lowercase();
 
-    let is_zombie = p_lower.contains("zombie") || p_lower.contains("blood") || p_lower.contains("horror");
-    let is_cyberpunk = p_lower.contains("samurai") || p_lower.contains("cyberpunk") || p_lower.contains("neon");
+    let is_zombie =
+        p_lower.contains("zombie") || p_lower.contains("blood") || p_lower.contains("horror");
+    let is_cyberpunk =
+        p_lower.contains("samurai") || p_lower.contains("cyberpunk") || p_lower.contains("neon");
 
     let (base_r, base_g, base_b) = if is_zombie {
         (130.0f32, 25.0f32, 20.0f32)
@@ -1098,8 +1127,10 @@ fn generate_cinematic_image(prompt: &str, seed: u64, width: u32, height: u32) ->
         let grain = (((x * 123 + y * 456 + seed as u32) % 47) as f32 / 47.0 - 0.5) * 0.08;
         let smoke = (u * 4.0).sin() * (v * 6.0).cos() * 0.5 + 0.5;
 
-        let r = ((base_r * ray * vignette * (0.8 + smoke * 0.4) + grain * 255.0).clamp(5.0, 245.0)) as u8;
-        let g = ((base_g * ray * vignette * (0.7 + smoke * 0.3) + grain * 255.0).clamp(5.0, 235.0)) as u8;
+        let r = ((base_r * ray * vignette * (0.8 + smoke * 0.4) + grain * 255.0).clamp(5.0, 245.0))
+            as u8;
+        let g = ((base_g * ray * vignette * (0.7 + smoke * 0.3) + grain * 255.0).clamp(5.0, 235.0))
+            as u8;
         let b = ((base_b * (1.0 - ray * 0.5) * vignette + grain * 255.0).clamp(5.0, 245.0)) as u8;
 
         *pixel = image::Rgb([r, g, b]);

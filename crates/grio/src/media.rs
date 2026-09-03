@@ -63,7 +63,11 @@ impl StreamInfo {
 pub fn split_data_url(data_url: &str) -> Option<(String, String)> {
     let rest = data_url.strip_prefix("data:")?;
     let (meta, data) = rest.split_once(',')?;
-    let mime = meta.split(';').next().unwrap_or("application/octet-stream").to_string();
+    let mime = meta
+        .split(';')
+        .next()
+        .unwrap_or("application/octet-stream")
+        .to_string();
     Some((mime, data.to_string()))
 }
 
@@ -76,7 +80,12 @@ pub fn inspect(data_url: &str) -> Option<MediaInfo> {
         return None;
     }
     let (width, height) = dimensions(&mime, &bytes);
-    Some(MediaInfo { mime, size_bytes: size, width, height })
+    Some(MediaInfo {
+        mime,
+        size_bytes: size,
+        width,
+        height,
+    })
 }
 
 /// Décode des données base64 (URL-safe accepté).
@@ -116,9 +125,7 @@ fn jpeg_dimensions(b: &[u8]) -> (Option<u32>, Option<u32>) {
             continue;
         }
         let marker = b[i + 1];
-        let sof = marker >= 0xC0
-            && marker <= 0xCF
-            && !matches!(marker, 0xC4 | 0xC8 | 0xCC);
+        let sof = (0xC0..=0xCF).contains(&marker) && !matches!(marker, 0xC4 | 0xC8 | 0xCC);
         if sof {
             let h = u16::from_be_bytes([b[i + 5], b[i + 6]]);
             let w = u16::from_be_bytes([b[i + 7], b[i + 8]]);
