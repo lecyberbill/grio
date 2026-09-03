@@ -2,7 +2,14 @@
 name = "grio"
 version.workspace = true
 edition.workspace = true
-description = "Minimal Gradio-like web engine in Rust"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
+description = "A fast, pure Rust alternative to Gradio with zero frontend dependencies"
 
 [dependencies]
 axum = { version = "0.8", features = ["ws"] }

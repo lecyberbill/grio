@@ -2,11 +2,18 @@
 name = "grio-cli"
 version.workspace = true
 edition.workspace = true
-description = "CLI tool and project scaffolder for grio applications"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
+description = "CLI tool and showcase runner for grio applications"
 
 [[bin]]
 name = "grio"
 path = "src/main.rs"
 
 [dependencies]
-grio = { path = "../grio" }
+grio = { path = "../grio", version = "0.1.0" }
