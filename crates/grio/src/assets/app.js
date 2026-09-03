@@ -817,12 +817,32 @@
         cv.width = w; cv.height = h;
         return { cv, ctx: cv.getContext('2d'), visible: true, opacity: 1 };
       };
+      const safeToDataUrl = (cv) => {
+        try {
+          return cv.toDataURL('image/png');
+        } catch (e) {
+          console.warn('[grio imageeditor] Canvas tainted, exporting clean fallback:', e);
+          return '';
+        }
+      };
+
+      const safeGetImageData = (ctx, w, h) => {
+        try {
+          return ctx.getImageData(0, 0, w, h);
+        } catch (e) {
+          console.warn('[grio imageeditor] getImageData blocked by cross-origin, using blank buffer:', e);
+          return ctx.createImageData(w, h);
+        }
+      };
+
       const visibleComp = () => {
         const cv = document.createElement('canvas');
         cv.width = BGW; cv.height = BGH;
         const g = cv.getContext('2d');
-        if (bg) g.drawImage(bg, 0, 0);
-        layers.forEach((l) => { if (l.visible) { g.globalAlpha = l.opacity; g.drawImage(l.cv, 0, 0); g.globalAlpha = 1; } });
+        if (bg) {
+          try { g.drawImage(bg, 0, 0); } catch (_) {}
+        }
+        layers.forEach((l) => { if (l.visible) { g.globalAlpha = l.opacity; try { g.drawImage(l.cv, 0, 0); } catch (_) {} g.globalAlpha = 1; } });
         return cv;
       };
       const mask = () => {
@@ -831,24 +851,33 @@
         const g = cv.getContext('2d');
         g.fillStyle = '#000'; g.fillRect(0, 0, BGW, BGH);
         layers.forEach((l) => {
-          g.drawImage(l.cv, 0, 0);
-          g.globalCompositeOperation = 'source-in';
-          g.fillStyle = '#fff'; g.fillRect(0, 0, BGW, BGH);
-          g.globalCompositeOperation = 'source-over';
+          try {
+            g.drawImage(l.cv, 0, 0);
+            g.globalCompositeOperation = 'source-in';
+            g.fillStyle = '#fff'; g.fillRect(0, 0, BGW, BGH);
+            g.globalCompositeOperation = 'source-over';
+          } catch (_) {}
         });
         return cv;
       };
-      const snapshot = () => ({ bg: bg ? bg.getContext('2d').getImageData(0, 0, BGW, BGH) : null, layers: layers.map((l) => l.ctx.getImageData(0, 0, BGW, BGH)), w: BGW, h: BGH });
+      const snapshot = () => ({
+        bg: bg ? safeGetImageData(bg.getContext('2d'), BGW, BGH) : null,
+        layers: layers.map((l) => safeGetImageData(l.ctx, BGW, BGH)),
+        w: BGW,
+        h: BGH
+      });
       const history = []; let hIndex = -1;
       const pushHistory = () => { history.splice(hIndex + 1); history.push(snapshot()); if (history.length > 20) history.shift(); hIndex = history.length - 1; };
       const restore = (s) => {
         BGW = s.w; BGH = s.h;
         bg = document.createElement('canvas'); bg.width = BGW; bg.height = BGH;
-        if (s.bg) bg.getContext('2d').putImageData(s.bg, 0, 0);
+        if (s.bg) {
+          try { bg.getContext('2d').putImageData(s.bg, 0, 0); } catch (_) {}
+        }
         layers.splice(0, layers.length);
         for (let i = 0; i < s.layers.length; i++) {
           layers.push(mkLayer(BGW, BGH));
-          layers[i].ctx.putImageData(s.layers[i], 0, 0);
+          try { layers[i].ctx.putImageData(s.layers[i], 0, 0); } catch (_) {}
         }
       };
       const redo = (ev) => { if (hIndex + 1 >= history.length) return; restore(history[++hIndex]); draw(); commit(); };
@@ -885,11 +914,11 @@
         vctx.setTransform(1, 0, 0, 1, 0, 0);
         vctx.clearRect(0, 0, view.width, view.height);
         const g = vctx;
-        if (bg) { g.drawImage(bg, tx, ty, BGW * zoom, BGH * zoom); }
+        if (bg) { try { g.drawImage(bg, tx, ty, BGW * zoom, BGH * zoom); } catch (_) {} }
         layers.forEach((l) => {
           if (!l.visible) return;
           g.globalAlpha = l.opacity;
-          g.drawImage(l.cv, tx, ty, BGW * zoom, BGH * zoom);
+          try { g.drawImage(l.cv, tx, ty, BGW * zoom, BGH * zoom); } catch (_) {}
           g.globalAlpha = 1;
         });
       };
@@ -903,12 +932,16 @@
         if (!interactive) return;
         const img = visibleComp(), mk = mask();
         emit(c, 'change', {
-          image: img.toDataURL('image/png'),
-          layers: layers.map((l) => l.cv.toDataURL('image/png')),
-          mask: mk.toDataURL('image/png'),
+          image: safeToDataUrl(img),
+          layers: layers.map((l) => safeToDataUrl(l.cv)),
+          mask: safeToDataUrl(mk),
         });
       };
-      c.getValue = () => ({ image: visibleComp().toDataURL('image/png'), layers: layers.map((l) => l.cv.toDataURL('image/png')), mask: mask().toDataURL('image/png') });
+      c.getValue = () => ({
+        image: safeToDataUrl(visibleComp()),
+        layers: layers.map((l) => safeToDataUrl(l.cv)),
+        mask: safeToDataUrl(mask())
+      });
       c.apply = (patch) => {
         if (patch.visible != null) c.el.hidden = !patch.visible;
         if (patch.value != null && dataUrl(patch.value) && dataUrl(patch.value) !== bgSrc) {
@@ -920,9 +953,13 @@
       const px = (fn) => {
         if (!bg) return;
         const g = bg.getContext('2d');
-        const d = g.getImageData(0, 0, BGW, BGH);
-        for (let i = 0; i < d.data.length; i += 4) fn(i, d.data);
-        g.putImageData(d, 0, 0);
+        try {
+          const d = g.getImageData(0, 0, BGW, BGH);
+          for (let i = 0; i < d.data.length; i += 4) fn(i, d.data);
+          g.putImageData(d, 0, 0);
+        } catch (e) {
+          console.warn('[grio imageeditor] filter pixel manipulation blocked by CORS:', e);
+        }
       };
       const gray = () => { px((i, d) => { const v = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; d[i] = d[i + 1] = d[i + 2] = v; }); };
       const invert = () => { px((i, d) => { d[i] = 255 - d[i]; d[i + 1] = 255 - d[i + 1]; d[i + 2] = 255 - d[i + 2]; }); };
@@ -1255,21 +1292,43 @@
           fin();
           return;
         }
-        const im = new Image();
-        im.onload = () => {
-          let w = im.naturalWidth || 700, h = im.naturalHeight || 400;
+
+        const applyImage = (imgObj) => {
+          let w = imgObj.naturalWidth || imgObj.width || 700;
+          let h = imgObj.naturalHeight || imgObj.height || 400;
           const s = Math.min(1, 4096 / w, 4096 / h, Math.sqrt(1.6e7 / (w * h)));
           w = Math.max(1, Math.round(w * s)); h = Math.max(1, Math.round(h * s));
           BGW = w; BGH = h;
           bgSrc = src;
           bg = document.createElement('canvas');
           bg.width = BGW; bg.height = BGH;
-          bg.getContext('2d').drawImage(im, 0, 0, BGW, BGH);
+          bg.getContext('2d').drawImage(imgObj, 0, 0, BGW, BGH);
           layers.splice(0, layers.length);
           for (let i = 0; i < nLayers; i++) layers.push(mkLayer(BGW, BGH));
           fin();
         };
-        im.onerror = () => toast('Impossible de charger cette image', 'error');
+
+        const im = new Image();
+        im.crossOrigin = 'anonymous';
+        im.onload = () => applyImage(im);
+        im.onerror = () => {
+          // Tentative de fallback via fetch + blob dataURL pour contourner les blocages CORS stricts
+          fetch(src)
+            .then((r) => r.blob())
+            .then((blob) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const im2 = new Image();
+                im2.onload = () => applyImage(im2);
+                im2.src = reader.result;
+              };
+              reader.readAsDataURL(blob);
+            })
+            .catch(() => {
+              console.warn('[grio imageeditor] Could not load background image:', src);
+              toast('Impossible de charger cette image', 'error');
+            });
+        };
         im.src = src;
       };
 
