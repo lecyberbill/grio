@@ -39,12 +39,17 @@ jobs:
           node-version: 22
       - name: Validate Embedded JavaScript Syntax
         run: |
-          for file in crates/grio/src/assets/js/*.js; do
-            node --check "$file" || true
-          done
+          node --check crates/grio/src/assets/js/core.js \
+            crates/grio/src/assets/js/forms.js \
+            crates/grio/src/assets/js/data.js \
+            crates/grio/src/assets/js/media.js \
+            crates/grio/src/assets/js/canvas_editor.js \
+            crates/grio/src/assets/js/special.js \
+            crates/grio/src/assets/js/router.js \
+            crates/grio/src/assets/js/i18n.js
       - name: Check Formatting
         run: cargo fmt --all -- --check
       - name: Clippy Linter
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Build Documentation
-        run: cargo doc --no-deps --all-features
+        run: cargo doc -p grio --no-deps --all-features
