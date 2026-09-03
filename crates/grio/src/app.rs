@@ -986,17 +986,33 @@ impl App {
 fn open_native_window(url: &str) {
     #[cfg(target_os = "windows")]
     {
-        // Tente d'ouvrir en vraie fenêtre applicative autonome (Frameless App Window)
-        let ps_cmd = format!(
-            "if (Get-Command msedge -ErrorAction SilentlyContinue) {{ Start-Process msedge -ArgumentList '--app={url}', '--window-size=1050,800' }} elseif (Get-Command chrome -ErrorAction SilentlyContinue) {{ Start-Process chrome -ArgumentList '--app={url}', '--window-size=1050,800' }} else {{ Start-Process '{url}' }}"
-        );
+        let candidates = [
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        ];
 
-        if std::process::Command::new("powershell")
-            .args(["-NoProfile", "-Command", &ps_cmd])
-            .spawn()
-            .is_err()
-        {
-            let _ = std::process::Command::new("explorer").arg(url).spawn();
+        let mut launched = false;
+        for path in &candidates {
+            if std::path::Path::new(path).exists() {
+                let app_arg = format!("--app={url}");
+                let size_arg = "--window-size=1050,800";
+                if std::process::Command::new(path)
+                    .args([&app_arg, size_arg])
+                    .spawn()
+                    .is_ok()
+                {
+                    launched = true;
+                    break;
+                }
+            }
+        }
+
+        if !launched {
+            let _ = std::process::Command::new("powershell")
+                .args(["-NoProfile", "-Command", &format!("Start-Process '{url}'")])
+                .spawn();
         }
     }
 
