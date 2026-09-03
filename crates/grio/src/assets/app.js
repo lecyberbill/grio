@@ -32,6 +32,34 @@
     send({ t: 'event', c: c.id, e: name, d: data ?? null, v: inputsSnapshot() });
   }
 
+  // Bus d'écouteurs client pour les scripts personnalisés (window.grio.on)
+  const clientSubscribers = {};
+
+  // API publique robuste exposée sur window pour scripts utilisateur et composants HTML
+  window.grio = {
+    emit(id, eventName, data) {
+      const c = byId[id] || { id };
+      emit(c, eventName || 'change', data);
+    },
+    get(id) {
+      const c = byId[id];
+      return c && c.getValue ? c.getValue() : undefined;
+    },
+    snapshot() {
+      return inputsSnapshot();
+    },
+    on(id, callback) {
+      if (!clientSubscribers[id]) clientSubscribers[id] = [];
+      clientSubscribers[id].push(callback);
+      return () => {
+        clientSubscribers[id] = (clientSubscribers[id] || []).filter((cb) => cb !== callback);
+      };
+    },
+    toast(msg, level) {
+      toast(msg, level);
+    }
+  };
+
   function send(payload) {
     const raw = JSON.stringify(payload);
     if (ready) ws.send(raw);
@@ -76,6 +104,12 @@
         (m.u || []).forEach((u) => {
           const c = byId[u.id];
           if (c && c.apply) { c.apply(u.p || {}); flash(c.el); }
+          // Notification des abonnés client (window.grio.on)
+          if (clientSubscribers[u.id]) {
+            clientSubscribers[u.id].forEach((cb) => {
+              try { cb(u.p || {}); } catch (err) { console.error('[grio.on error]', err); }
+            });
+          }
         });
       } else if (m.t === 'alert') {
         toast(m.m || '—', m.level || 'info');
@@ -99,8 +133,10 @@
     if (!L) return;
     const st = el.style;
     if (L.scale) { st.flexGrow = L.scale; st.flexBasis = '0%'; }
-    if (L.width) st.width = L.width + 'px';
+    if (L.width) { st.width = L.width + 'px'; st.flexGrow = '0'; }
     if (L.height) st.height = L.height + 'px';
+    if (L.max_width) { st.maxWidth = L.max_width + 'px'; }
+    if (L.max_height) st.maxHeight = L.max_height + 'px';
     if (L.min_width) st.minWidth = L.min_width + 'px';
   }
 
@@ -237,25 +273,99 @@
   register('progress', {
     mount(c) {
       const p = c.props;
-      c.el.innerHTML =
-        '<div class="mg-label"><span>' + esc(p.label || c.id) + '</span>' +
-        '<span class="mg-progress-value">0%</span></div>' +
-        '<div class="mg-progress-track"><div class="mg-progress-bar" style="width:0%"></div></div>' +
-        '<div class="mg-progress-label"></div>';
-      c.apply = (patch) => {
-        if (patch.value == null) return;
-        const raw = patch.value;
-        const f = typeof raw === 'number' ? raw : (raw.progress ?? 0);
-        const label = typeof raw === 'object' && raw != null ? (raw.label ?? '') : '';
-        const pct = Math.max(0, Math.min(100, Math.round(f * 100)));
+      const variant = p.variant || 'bar';
+      const size = p.size || (variant === 'bar' ? null : 84);
+
+      if (variant === 'circle') {
+        const dim = size;
+        const strokeW = 8;
+        const radius = 42;
+        const circ = 2 * Math.PI * radius;
+        c.el.innerHTML =
+          '<div class="mg-progress-circle-wrap" style="width:' + dim + 'px">' +
+          '<div class="mg-progress-circle-box" style="width:' + dim + 'px;height:' + dim + 'px">' +
+          '<svg class="mg-progress-circle-svg" viewBox="0 0 100 100">' +
+          '<circle class="mg-progress-circle-bg" cx="50" cy="50" r="' + radius + '" stroke-width="' + strokeW + '"/>' +
+          '<circle class="mg-progress-circle-fill" cx="50" cy="50" r="' + radius + '" stroke-width="' + strokeW + '" ' +
+          'stroke-dasharray="' + circ + '" stroke-dashoffset="' + circ + '"/>' +
+          '</svg>' +
+          '<div class="mg-progress-circle-center">' +
+          '<span class="mg-progress-value">0%</span>' +
+          '</div>' +
+          '</div>' +
+          '<div class="mg-progress-info">' +
+          '<div class="mg-label-text">' + esc(p.label || c.id) + '</div>' +
+          '<div class="mg-progress-label"></div>' +
+          '</div>' +
+          '</div>';
+
+        const fill = c.el.querySelector('.mg-progress-circle-fill');
+        const val = c.el.querySelector('.mg-progress-value');
+        const lab = c.el.querySelector('.mg-progress-label');
+
+        c.apply = (patch) => {
+          if (patch.value == null) return;
+          const raw = patch.value;
+          const f = typeof raw === 'number' ? raw : (raw.progress ?? 0);
+          const label = typeof raw === 'object' && raw != null ? (raw.label ?? '') : '';
+          const pct = Math.max(0, Math.min(100, Math.round(f * 100)));
+          const offset = circ - (pct / 100) * circ;
+          fill.style.strokeDashoffset = offset;
+          fill.classList.toggle('done', pct >= 100);
+          val.textContent = pct + '%';
+          lab.textContent = label != null ? String(label) : '';
+        };
+      } else if (variant === 'pie') {
+        const dim = size;
+        c.el.innerHTML =
+          '<div class="mg-progress-pie-wrap">' +
+          '<div class="mg-progress-pie-disk" style="width:' + dim + 'px;height:' + dim + 'px;--mg-pct:0%">' +
+          '<div class="mg-progress-pie-badge">0%</div>' +
+          '</div>' +
+          '<div class="mg-progress-info">' +
+          '<div class="mg-label-text">' + esc(p.label || c.id) + '</div>' +
+          '<div class="mg-progress-label"></div>' +
+          '</div>' +
+          '</div>';
+
+        const disk = c.el.querySelector('.mg-progress-pie-disk');
+        const badge = c.el.querySelector('.mg-progress-pie-badge');
+        const lab = c.el.querySelector('.mg-progress-label');
+
+        c.apply = (patch) => {
+          if (patch.value == null) return;
+          const raw = patch.value;
+          const f = typeof raw === 'number' ? raw : (raw.progress ?? 0);
+          const label = typeof raw === 'object' && raw != null ? (raw.label ?? '') : '';
+          const pct = Math.max(0, Math.min(100, Math.round(f * 100)));
+          disk.style.setProperty('--mg-pct', pct + '%');
+          disk.classList.toggle('done', pct >= 100);
+          badge.textContent = pct + '%';
+          lab.textContent = label != null ? String(label) : '';
+        };
+      } else {
+        // Mode bar par défaut
+        c.el.innerHTML =
+          '<div class="mg-label"><span>' + esc(p.label || c.id) + '</span>' +
+          '<span class="mg-progress-value">0%</span></div>' +
+          '<div class="mg-progress-track"><div class="mg-progress-bar" style="width:0%"></div></div>' +
+          '<div class="mg-progress-label"></div>';
         const bar = c.el.querySelector('.mg-progress-bar');
         const val = c.el.querySelector('.mg-progress-value');
         const lab = c.el.querySelector('.mg-progress-label');
-        bar.style.width = pct + '%';
-        bar.classList.toggle('done', pct >= 100);
-        val.textContent = pct + '%';
-        lab.textContent = label != null ? String(label) : '';
-      };
+
+        c.apply = (patch) => {
+          if (patch.value == null) return;
+          const raw = patch.value;
+          const f = typeof raw === 'number' ? raw : (raw.progress ?? 0);
+          const label = typeof raw === 'object' && raw != null ? (raw.label ?? '') : '';
+          const pct = Math.max(0, Math.min(100, Math.round(f * 100)));
+          bar.style.width = pct + '%';
+          bar.classList.toggle('done', pct >= 100);
+          val.textContent = pct + '%';
+          lab.textContent = label != null ? String(label) : '';
+        };
+      }
     }
   });
 
@@ -476,10 +586,14 @@
       if (interactive) {
         const dz = document.createElement('div');
         dz.className = 'mg-file-dropzone';
-        dz.innerHTML = '<span class="mg-file-icon">📁</span><span class="mg-file-drop-text"></span>';
+        dz.innerHTML = '<span class="mg-file-icon">📁</span><div class="mg-file-drop-info"><span class="mg-file-drop-text"></span><span class="mg-file-drop-sub"></span></div>';
         box.appendChild(dz);
         const dropText = dz.querySelector('.mg-file-drop-text');
-        const setDropText = () => { dropText.textContent = t('file_drop'); };
+        const dropSub = dz.querySelector('.mg-file-drop-sub');
+        const setDropText = () => {
+          dropText.textContent = t('file_drop', 'Click or drop files here to upload');
+          dropSub.textContent = t('file_drop_sub', 'Drag & drop documents or browse');
+        };
         setDropText();
         onI18n(setDropText);
         const prog = document.createElement('div');
@@ -835,8 +949,7 @@
           if (f) readFile(f, loadUserImage);
           fileIn.value = '';
         });
-        const open = dab('Ouvrir une image', '-');
-        open.title = 'Charger une image';
+        const open = dab('', '-');
         open.addEventListener('click', () => fileIn.click());
         bar.appendChild(open);
         bar.appendChild(fileIn);
@@ -850,34 +963,53 @@
           if (f && f.type.startsWith('image/')) readFile(f, loadUserImage);
         });
         const tools = [];
-        if (p.brush !== false) tools.push(['brush', 'Pinceau', '🖌'], ['eraser', 'Gomme', '⌫']);
-        if (p.shapes !== false) tools.push(['rect', 'Rectangle', '▭'], ['line', 'Ligne', '╱'], ['arrow', 'Flèche', '→']);
-        if (p.crop !== false) tools.push(['crop', 'Rogner', '✂']);
-        tools.push(['pan', 'Déplacer', '✋']);
-        tools.forEach(([id, nm, ic]) => {
-          const b = dab(nm, '-'); b.title = nm; b.dataset.t = id;
-          b.addEventListener('click', () => { tool = id; bar.querySelectorAll('.mg-ie-tool').forEach((x) => x.classList.remove('mg-ie-on')); b.classList.add('mg-ie-on'); });
+        if (p.brush !== false) tools.push(['brush', 'ie_brush', '🖌️'], ['eraser', 'ie_eraser', '🧹']);
+        if (p.shapes !== false) tools.push(['rect', 'ie_rect', '▭'], ['line', 'ie_line', '╱'], ['arrow', 'ie_arrow', '➜']);
+        if (p.crop !== false) tools.push(['crop', 'ie_crop', '✂️']);
+        tools.push(['pan', 'ie_pan', '✋']);
+        const toolBtns = [];
+        tools.forEach(([id, key, ic], idx) => {
+          const b = dab('', '-'); b.dataset.t = id; b.dataset.key = key; b.dataset.icon = ic;
+          if (idx === 0 && tool === id) b.classList.add('mg-ie-on');
+          b.addEventListener('click', () => {
+            tool = id;
+            ovl.dataset.t = id;
+            bar.querySelectorAll('.mg-ie-tool').forEach((x) => x.classList.remove('mg-ie-on'));
+            b.classList.add('mg-ie-on');
+          });
           bar.appendChild(b);
+          toolBtns.push(b);
         });
         bar.appendChild(document.createElement('span')).className = 'mg-ie-sep';
         const col = document.createElement('input');
-        col.type = 'color'; col.value = color; col.title = 'Couleur';
+        col.type = 'color'; col.value = color;
         col.addEventListener('input', () => { color = col.value; });
         bar.appendChild(col);
         const sz = document.createElement('input');
-        sz.type = 'range'; sz.min = 2; sz.max = 80; sz.value = size; sz.title = 'Épaisseur';
+        sz.type = 'range'; sz.min = 2; sz.max = 80; sz.value = size;
         sz.addEventListener('input', () => { size = +sz.value; });
         bar.appendChild(sz);
         bar.appendChild(document.createElement('span')).className = 'mg-ie-sep';
-        bar.appendChild(dab('↻ Rotation', '-')).addEventListener('click', () => { if (!interactive) return; pushHistory(); rotateBoth(1); draw(); commit(); });
+        const rotBtn = dab('', '-');
+        rotBtn.addEventListener('click', () => { if (!interactive) return; pushHistory(); rotateBoth(1); draw(); commit(); });
+        bar.appendChild(rotBtn);
+
         const filt = document.createElement('div');
         filt.className = 'mg-btn mg-btn-secondary mg-ie-tool mg-ie-menuwrap';
-        filt.textContent = 'Filtres';
+        filt.innerHTML = '<span>✨ <span class="mg-filt-label"></span></span>';
         const fmenu = document.createElement('div');
         fmenu.className = 'mg-ie-menu';
         fmenu.hidden = true;
-        [['Gris', gray], ['Inverse', invert], ['Clair', () => level(1.35)], ['Sombre', () => level(0.6)], ['Flou', blur4]].forEach(([nm, fn]) => {
-          const b = document.createElement('button'); b.type = 'button'; b.textContent = nm;
+        const filterDefs = [
+          ['ie_f_gray', gray],
+          ['ie_f_invert', invert],
+          ['ie_f_bright', () => level(1.35)],
+          ['ie_f_dark', () => level(0.6)],
+          ['ie_f_blur', blur4]
+        ];
+        const filterBtns = [];
+        filterDefs.forEach(([key, fn]) => {
+          const b = document.createElement('button'); b.type = 'button'; b.dataset.key = key;
           b.addEventListener('click', (ev) => {
             ev.stopPropagation();
             fmenu.hidden = true;
@@ -885,14 +1017,43 @@
             pushHistory(); fn(); draw(); commit();
           });
           fmenu.appendChild(b);
+          filterBtns.push(b);
         });
         filt.appendChild(fmenu);
         filt.addEventListener('click', () => { fmenu.hidden = !fmenu.hidden; });
         bar.appendChild(filt);
         bar.appendChild(document.createElement('span')).className = 'mg-ie-sep';
-        bar.appendChild(dab('Annuler', '-')).addEventListener('click', undo);
-        bar.appendChild(dab('Rétablir', '-')).addEventListener('click', redo);
-        bar.appendChild(dab('Reset', '-')).addEventListener('click', () => { if (!interactive) return; pushHistory(); loadBg(bgInit || null, true); draw(); commit(); });
+        const undoBtn = dab('', '-'); undoBtn.addEventListener('click', undo);
+        const redoBtn = dab('', '-'); redoBtn.addEventListener('click', redo);
+        const resetBtn = dab('', '-'); resetBtn.addEventListener('click', () => { if (!interactive) return; pushHistory(); loadBg(bgInit || null, true); draw(); commit(); });
+        bar.appendChild(undoBtn);
+        bar.appendChild(redoBtn);
+        bar.appendChild(resetBtn);
+
+        const updateIeToolbarTexts = () => {
+          open.textContent = `📁 ${t('ie_open', 'Ouvrir')}`;
+          open.title = t('ie_open_title', 'Charger une image');
+          toolBtns.forEach((b) => {
+            const label = t(b.dataset.key);
+            b.textContent = `${b.dataset.icon} ${label}`;
+            b.title = label;
+          });
+          col.title = t('ie_color', 'Couleur');
+          sz.title = t('ie_size', 'Épaisseur');
+          rotBtn.textContent = `🔄 ${t('ie_rotate', 'Rotation')}`;
+          rotBtn.title = t('ie_rotate', 'Rotation');
+          const fl = filt.querySelector('.mg-filt-label');
+          if (fl) fl.textContent = t('ie_filters', 'Filtres');
+          filterBtns.forEach((b) => { b.textContent = t(b.dataset.key); });
+          undoBtn.textContent = `↩️ ${t('ie_undo', 'Annuler')}`;
+          undoBtn.title = t('ie_undo', 'Annuler');
+          redoBtn.textContent = `↪️ ${t('ie_redo', 'Rétablir')}`;
+          redoBtn.title = t('ie_redo', 'Rétablir');
+          resetBtn.textContent = `🗑️ ${t('ie_reset', 'Reset')}`;
+          resetBtn.title = t('ie_reset', 'Reset');
+        };
+        updateIeToolbarTexts();
+        onI18n(updateIeToolbarTexts);
       }
       wrap.appendChild(bar);
       wrap.appendChild(stage);
@@ -902,7 +1063,7 @@
       lp.className = 'mg-ie-layers';
       const lpTitle = document.createElement('div');
       lpTitle.className = 'mg-label';
-      lpTitle.innerHTML = '<span>Calques</span>';
+      lpTitle.innerHTML = '<span class="mg-lp-title">Calques</span>';
       lp.appendChild(lpTitle);
       let sel = 0;
       const buildLayersUI = () => {
@@ -913,10 +1074,11 @@
           const eye = document.createElement('button');
           eye.type = 'button'; eye.className = 'mg-btn mg-btn-secondary mg-ico';
           eye.textContent = l.visible ? '👁' : '—';
-          eye.title = 'Visibilité';
+          eye.title = t('ie_visibility', 'Visibilité');
           eye.addEventListener('click', () => { l.visible = !l.visible; eye.textContent = l.visible ? '👁' : '—'; draw(); commit(); });
           const name = document.createElement('span');
-          name.textContent = 'Calque ' + (i + 1);
+          name.className = 'mg-layer-name';
+          name.textContent = `${t('ie_layer', 'Calque')} ${i + 1}`;
           const op = document.createElement('input');
           op.type = 'range'; op.min = 0; op.max = 100; op.value = Math.round(l.opacity * 100);
           op.addEventListener('input', () => { l.opacity = op.value / 100; draw(); });
@@ -926,6 +1088,18 @@
           lp.appendChild(row);
         });
       };
+      const updateLayersTitle = () => {
+        const tSpan = lpTitle.querySelector('.mg-lp-title');
+        if (tSpan) tSpan.textContent = t('ie_layers', 'Calques');
+        lp.querySelectorAll('.mg-ie-layer').forEach((row, idx) => {
+          const n = row.querySelector('.mg-layer-name');
+          if (n) n.textContent = `${t('ie_layer', 'Calque')} ${idx + 1}`;
+          const eye = row.querySelector('.mg-ico');
+          if (eye) eye.title = t('ie_visibility', 'Visibilité');
+        });
+      };
+      onI18n(updateLayersTitle);
+      updateLayersTitle();
       wrap.appendChild(lp);
       if (!interactive) lp.hidden = true;
       buildLayersUI();
@@ -1102,6 +1276,12 @@
       loadBg(bgInit);
       requestAnimationFrame(() => fit());
       window.addEventListener('resize', fit);
+      if (window.ResizeObserver) {
+        const ro = new ResizeObserver(() => {
+          if (stage.clientWidth > 0 && stage.clientHeight > 0) fit();
+        });
+        ro.observe(stage);
+      }
 
       if (!interactive && bgInit) {
         // sortie seule : on ne monte que l'image, pas la barre d'outils
@@ -1140,7 +1320,9 @@
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'mg-btn mg-btn-secondary';
-        btn.textContent = 'Choisir un audio';
+        const setAudioBtnText = () => { btn.textContent = t('media_choose_audio', 'Choisir un audio'); };
+        setAudioBtnText();
+        onI18n(setAudioBtnText);
         btn.addEventListener('click', () => file.click());
         file.addEventListener('change', (e) => {
           const f = e.target.files && e.target.files[0];
@@ -1222,7 +1404,9 @@
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'mg-btn mg-btn-secondary';
-        btn.textContent = 'Choisir une vidéo';
+        const setVideoBtnText = () => { btn.textContent = t('media_choose_video', 'Choisir une vidéo'); };
+        setVideoBtnText();
+        onI18n(setVideoBtnText);
         btn.addEventListener('click', () => file.click());
         file.addEventListener('change', (e) => {
           const f = e.target.files && e.target.files[0];
@@ -2256,13 +2440,24 @@
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'mg-tab-btn' + (idx === selected ? ' mg-active' : '');
-        btn.innerHTML = iconText + esc(labelText);
+        btn.dataset.rawLabel = labelText;
+        btn.innerHTML = iconText + '<span>' + esc(t(labelText, labelText)) + '</span>';
         btn.addEventListener('click', () => {
           selected = idx;
           bar.querySelectorAll('.mg-tab-btn').forEach((b, i) => b.classList.toggle('mg-active', i === selected));
           panels.forEach((pane, i) => pane.classList.toggle('mg-active', i === selected));
         });
         bar.appendChild(btn);
+      });
+
+      onI18n(() => {
+        bar.querySelectorAll('.mg-tab-btn').forEach((btn) => {
+          const raw = btn.dataset.rawLabel;
+          if (raw) {
+            const span = btn.querySelector('span:last-child') || btn;
+            span.textContent = t(raw, raw);
+          }
+        });
       });
 
       c.el.insertBefore(bar, c.el.firstChild);
@@ -2273,6 +2468,1066 @@
           selected = patch.selected;
           bar.querySelectorAll('.mg-tab-btn').forEach((b, i) => b.classList.toggle('mg-active', i === selected));
           panels.forEach((pane, i) => pane.classList.toggle('mg-active', i === selected));
+        }
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('radio', {
+    mount(c) {
+      const p = c.props;
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-radio-group mg-radio-' + (p.direction || 'horizontal') + (p.style === 'pills' ? ' mg-radio-pills' : '');
+      const lab = document.createElement('div');
+      lab.className = 'mg-label';
+      lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      wrap.appendChild(lab);
+
+      const items = document.createElement('div');
+      items.className = 'mg-radio-items';
+      wrap.appendChild(items);
+
+      let current = p.value != null ? String(p.value) : '';
+      const choices = Array.isArray(p.choices) ? p.choices : [];
+
+      const render = () => {
+        items.innerHTML = '';
+        choices.forEach((choice, idx) => {
+          const item = document.createElement('label');
+          item.className = 'mg-radio-item' + (current === choice ? ' sel' : '');
+          const isRadio = p.style === 'radio';
+          const input = document.createElement('input');
+          input.type = 'radio';
+          input.name = 'mg_r_' + c.id;
+          input.value = choice;
+          input.checked = current === choice;
+          if (p.interactive === false) input.disabled = true;
+
+          input.addEventListener('change', () => {
+            current = choice;
+            items.querySelectorAll('.mg-radio-item').forEach((it) => it.classList.remove('sel'));
+            item.classList.add('sel');
+            emit(c, 'change', current);
+          });
+
+          if (!isRadio) {
+            input.style.display = 'none';
+          }
+          item.appendChild(input);
+          const txt = document.createElement('span');
+          txt.textContent = choice;
+          item.appendChild(txt);
+          items.appendChild(item);
+        });
+      };
+
+      render();
+      c.el.appendChild(wrap);
+      if (p.interactive === false) c.el.classList.add('mg-disabled');
+
+      c.getValue = () => current;
+      c.apply = (patch) => {
+        if (patch.value != null) {
+          current = String(patch.value);
+          render();
+        }
+        if (patch.label != null) lab.innerHTML = '<span>' + esc(String(patch.label)) + '</span>';
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+        if (patch.disabled != null) {
+          p.interactive = !patch.disabled;
+          c.el.classList.toggle('mg-disabled', !!patch.disabled);
+          render();
+        }
+      };
+    }
+  });
+
+  register('sliderrange', {
+    mount(c) {
+      const p = c.props;
+      const min = typeof p.min === 'number' ? p.min : 0;
+      const max = typeof p.max === 'number' ? p.max : 100;
+      const step = typeof p.step === 'number' ? p.step : 1;
+      const unit = p.unit ? String(p.unit) : '';
+
+      let low = Array.isArray(p.value) && p.value.length > 0 ? Number(p.value[0]) : min;
+      let high = Array.isArray(p.value) && p.value.length > 1 ? Number(p.value[1]) : max;
+
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-slider-range-wrap';
+
+      const header = document.createElement('div');
+      header.className = 'mg-label';
+      const titleSpan = document.createElement('span');
+      titleSpan.textContent = p.label || c.id;
+      const valBadge = document.createElement('span');
+      valBadge.className = 'mg-range-badge';
+      header.appendChild(titleSpan);
+      header.appendChild(valBadge);
+      wrap.appendChild(header);
+
+      const trackWrap = document.createElement('div');
+      trackWrap.className = 'mg-slider-range-track';
+      const activeBar = document.createElement('div');
+      activeBar.className = 'mg-slider-range-highlight';
+      trackWrap.appendChild(activeBar);
+
+      const inputLow = document.createElement('input');
+      inputLow.type = 'range';
+      inputLow.className = 'mg-range-thumb mg-range-low';
+      inputLow.min = min; inputLow.max = max; inputLow.step = step; inputLow.value = low;
+
+      const inputHigh = document.createElement('input');
+      inputHigh.type = 'range';
+      inputHigh.className = 'mg-range-thumb mg-range-high';
+      inputHigh.min = min; inputHigh.max = max; inputHigh.step = step; inputHigh.value = high;
+
+      if (p.interactive === false) {
+        inputLow.disabled = true;
+        inputHigh.disabled = true;
+        c.el.classList.add('mg-disabled');
+      }
+
+      trackWrap.appendChild(inputLow);
+      trackWrap.appendChild(inputHigh);
+      wrap.appendChild(trackWrap);
+      c.el.appendChild(wrap);
+
+      const updateUI = () => {
+        const pLow = ((low - min) / (max - min)) * 100;
+        const pHigh = ((high - min) / (max - min)) * 100;
+        activeBar.style.left = Math.min(pLow, pHigh) + '%';
+        activeBar.style.width = Math.abs(pHigh - pLow) + '%';
+        valBadge.textContent = `[${low}${unit}, ${high}${unit}]`;
+      };
+
+      const onInput = (which) => {
+        let v1 = Number(inputLow.value);
+        let v2 = Number(inputHigh.value);
+        if (which === 'low' && v1 > v2) {
+          v1 = v2;
+          inputLow.value = v1;
+        } else if (which === 'high' && v2 < v1) {
+          v2 = v1;
+          inputHigh.value = v2;
+        }
+        low = v1;
+        high = v2;
+        updateUI();
+        emit(c, 'change', [low, high]);
+      };
+
+      inputLow.addEventListener('input', () => onInput('low'));
+      inputHigh.addEventListener('input', () => onInput('high'));
+      updateUI();
+
+      c.getValue = () => [low, high];
+      c.apply = (patch) => {
+        if (Array.isArray(patch.value)) {
+          if (patch.value.length > 0) low = Number(patch.value[0]);
+          if (patch.value.length > 1) high = Number(patch.value[1]);
+          inputLow.value = low;
+          inputHigh.value = high;
+          updateUI();
+        }
+        if (patch.label != null) titleSpan.textContent = patch.label;
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('colorpicker', {
+    mount(c) {
+      const p = c.props;
+      let current = p.value || '#6366f1';
+      const presets = Array.isArray(p.presets) ? p.presets : [];
+
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-color-picker';
+
+      const lab = document.createElement('div');
+      lab.className = 'mg-label';
+      lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      wrap.appendChild(lab);
+
+      const mainRow = document.createElement('div');
+      mainRow.className = 'mg-color-main-row';
+
+      const colorInput = document.createElement('input');
+      colorInput.type = 'color';
+      colorInput.className = 'mg-color-input';
+      colorInput.value = current;
+
+      const hexInput = document.createElement('input');
+      hexInput.type = 'text';
+      hexInput.className = 'mg-input mg-color-hex';
+      hexInput.value = current;
+      hexInput.spellcheck = false;
+
+      if (p.interactive === false) {
+        colorInput.disabled = true;
+        hexInput.disabled = true;
+        c.el.classList.add('mg-disabled');
+      }
+
+      mainRow.appendChild(colorInput);
+      mainRow.appendChild(hexInput);
+      wrap.appendChild(mainRow);
+
+      const swatches = document.createElement('div');
+      swatches.className = 'mg-color-swatches';
+
+      const selectColor = (hex) => {
+        current = hex;
+        colorInput.value = current;
+        hexInput.value = current;
+        swatches.querySelectorAll('.mg-color-swatch').forEach((s) => {
+          s.classList.toggle('sel', s.dataset.color.toLowerCase() === current.toLowerCase());
+        });
+        emit(c, 'change', current);
+      };
+
+      presets.forEach((hex) => {
+        const swatch = document.createElement('button');
+        swatch.type = 'button';
+        swatch.className = 'mg-color-swatch' + (hex.toLowerCase() === current.toLowerCase() ? ' sel' : '');
+        swatch.dataset.color = hex;
+        swatch.style.backgroundColor = hex;
+        swatch.title = hex;
+        if (p.interactive === false) swatch.disabled = true;
+        swatch.addEventListener('click', () => selectColor(hex));
+        swatches.appendChild(swatch);
+      });
+      wrap.appendChild(swatches);
+      c.el.appendChild(wrap);
+
+      colorInput.addEventListener('input', () => {
+        current = colorInput.value;
+        hexInput.value = current;
+        swatches.querySelectorAll('.mg-color-swatch').forEach((s) => {
+          s.classList.toggle('sel', s.dataset.color.toLowerCase() === current.toLowerCase());
+        });
+        emit(c, 'change', current);
+      });
+
+      hexInput.addEventListener('change', () => {
+        let v = hexInput.value.trim();
+        if (!v.startsWith('#')) v = '#' + v;
+        if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+          current = v;
+          colorInput.value = current;
+          swatches.querySelectorAll('.mg-color-swatch').forEach((s) => {
+            s.classList.toggle('sel', s.dataset.color.toLowerCase() === current.toLowerCase());
+          });
+          emit(c, 'change', current);
+        } else {
+          hexInput.value = current;
+        }
+      });
+
+      c.getValue = () => current;
+      c.apply = (patch) => {
+        if (patch.value != null) selectColor(String(patch.value));
+        if (patch.label != null) lab.innerHTML = '<span>' + esc(String(patch.label)) + '</span>';
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('annotatedimage', {
+    mount(c) {
+      const p = c.props;
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-annotated-wrap';
+
+      const lab = document.createElement('div');
+      lab.className = 'mg-label';
+      lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      wrap.appendChild(lab);
+
+      const stage = document.createElement('div');
+      stage.className = 'mg-annotated-stage';
+
+      const img = document.createElement('img');
+      img.className = 'mg-annotated-img';
+      img.alt = p.label || 'annotated';
+      stage.appendChild(img);
+
+      const svgOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svgOverlay.setAttribute('class', 'mg-annotated-svg');
+      stage.appendChild(svgOverlay);
+
+      wrap.appendChild(stage);
+      c.el.appendChild(wrap);
+
+      let currentImg = p.image || '';
+      let currentBoxes = Array.isArray(p.boxes) ? p.boxes : [];
+
+      const render = () => {
+        if (currentImg) {
+          img.src = currentImg;
+          img.style.display = 'block';
+        } else {
+          img.style.display = 'none';
+        }
+
+        svgOverlay.innerHTML = '';
+        currentBoxes.forEach((b) => {
+          if (!Array.isArray(b.box_coords) || b.box_coords.length < 4) return;
+          const [ymin, xmin, ymax, xmax] = b.box_coords;
+          const color = b.color || '#6366f1';
+
+          const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          rect.setAttribute('x', `${xmin * 100}%`);
+          rect.setAttribute('y', `${ymin * 100}%`);
+          rect.setAttribute('width', `${Math.max(0, xmax - xmin) * 100}%`);
+          rect.setAttribute('height', `${Math.max(0, ymax - ymin) * 100}%`);
+          rect.setAttribute('stroke', color);
+          rect.setAttribute('stroke-width', '2.5');
+          rect.setAttribute('fill', color + '22');
+          svgOverlay.appendChild(rect);
+
+          if (p.show_labels !== false && b.label) {
+            const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            txt.setAttribute('x', `${xmin * 100}%`);
+            txt.setAttribute('y', `${Math.max(4, ymin * 100 - 1)}%`);
+            txt.setAttribute('fill', color);
+            txt.setAttribute('font-size', '12');
+            txt.setAttribute('font-weight', 'bold');
+            txt.setAttribute('class', 'mg-bbox-tag');
+
+            let labelContent = b.label;
+            if (p.show_scores !== false && typeof b.score === 'number') {
+              labelContent += ` ${Math.round(b.score * 100)}%`;
+            }
+            txt.textContent = labelContent;
+            svgOverlay.appendChild(txt);
+          }
+        });
+      };
+
+      render();
+
+      c.apply = (patch) => {
+        if (patch.image != null) currentImg = String(patch.image);
+        if (Array.isArray(patch.boxes)) currentBoxes = patch.boxes;
+        if (patch.value && typeof patch.value === 'object') {
+          if (patch.value.image != null) currentImg = String(patch.value.image);
+          if (Array.isArray(patch.value.boxes)) currentBoxes = patch.value.boxes;
+        }
+        if (patch.label != null) lab.innerHTML = '<span>' + esc(String(patch.label)) + '</span>';
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+        render();
+      };
+    }
+  });
+
+  register('imagecomparison', {
+    mount(c) {
+      const p = c.props;
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-imgcomp-wrap';
+
+      const lab = document.createElement('div');
+      lab.className = 'mg-label';
+      lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      wrap.appendChild(lab);
+
+      const frame = document.createElement('div');
+      frame.className = 'mg-imgcomp-frame';
+
+      const imgAfter = document.createElement('img');
+      imgAfter.className = 'mg-imgcomp-img mg-imgcomp-after';
+      imgAfter.src = p.after || '';
+
+      const imgBefore = document.createElement('img');
+      imgBefore.className = 'mg-imgcomp-img mg-imgcomp-before';
+      imgBefore.src = p.before || '';
+
+      const sliderLine = document.createElement('div');
+      sliderLine.className = 'mg-imgcomp-divider';
+      const handle = document.createElement('div');
+      handle.className = 'mg-imgcomp-handle';
+      handle.innerHTML = '<span>⇆</span>';
+      sliderLine.appendChild(handle);
+
+      const tagBefore = document.createElement('span');
+      tagBefore.className = 'mg-imgcomp-badge mg-badge-before';
+      tagBefore.textContent = p.before_label || 'Before';
+
+      const tagAfter = document.createElement('span');
+      tagAfter.className = 'mg-imgcomp-badge mg-badge-after';
+      tagAfter.textContent = p.after_label || 'After';
+
+      frame.appendChild(imgAfter);
+      frame.appendChild(imgBefore);
+      frame.appendChild(sliderLine);
+      frame.appendChild(tagBefore);
+      frame.appendChild(tagAfter);
+      wrap.appendChild(frame);
+      c.el.appendChild(wrap);
+
+      let pos = typeof p.position === 'number' ? p.position : 50;
+
+      // Utilisation d'un clip-path inset : l'image originale reste à 100% de la largeur
+      // et ne s'étire ni ne se déforme jamais !
+      const setPos = (pct) => {
+        pos = Math.max(0, Math.min(100, pct));
+        imgBefore.style.clipPath = `inset(0 ${100 - pos}% 0 0)`;
+        sliderLine.style.left = pos + '%';
+      };
+
+      setPos(pos);
+
+      let isDragging = false;
+      const onMove = (e) => {
+        if (!isDragging) return;
+        const rect = frame.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const pct = ((clientX - rect.left) / rect.width) * 100;
+        setPos(pct);
+      };
+
+      const startDrag = (e) => {
+        isDragging = true;
+        onMove(e);
+      };
+      const stopDrag = () => { isDragging = false; };
+
+      frame.addEventListener('mousedown', startDrag);
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', stopDrag);
+
+      frame.addEventListener('touchstart', startDrag, { passive: true });
+      window.addEventListener('touchmove', onMove, { passive: true });
+      window.addEventListener('touchend', stopDrag);
+
+      c.apply = (patch) => {
+        if (patch.before != null) imgBefore.src = patch.before;
+        if (patch.after != null) imgAfter.src = patch.after;
+        if (patch.position != null) setPos(Number(patch.position));
+        if (patch.label != null) lab.innerHTML = '<span>' + esc(String(patch.label)) + '</span>';
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('audiorecorder', {
+    mount(c) {
+      const p = c.props;
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-recorder-wrap';
+
+      const lab = document.createElement('div');
+      lab.className = 'mg-label';
+      lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      wrap.appendChild(lab);
+
+      const panel = document.createElement('div');
+      panel.className = 'mg-recorder-panel';
+
+      const recBtn = document.createElement('button');
+      recBtn.type = 'button';
+      recBtn.className = 'mg-btn mg-rec-btn';
+      recBtn.innerHTML = '<span class="mg-rec-dot"></span> <span class="mg-rec-text">REC</span>';
+
+      const recText = recBtn.querySelector('.mg-rec-text');
+      const setRecBtnText = () => {
+        if (recBtn.classList.contains('recording')) {
+          recText.textContent = t('rec_stop', 'STOP');
+        } else {
+          recText.textContent = t('rec_rec', 'REC');
+        }
+      };
+      setRecBtnText();
+      onI18n(setRecBtnText);
+
+      const timerSpan = document.createElement('span');
+      timerSpan.className = 'mg-rec-timer';
+      timerSpan.textContent = '00:00';
+
+      const player = document.createElement('audio');
+      player.controls = true;
+      player.className = 'mg-rec-player';
+      player.style.display = 'none';
+
+      panel.appendChild(recBtn);
+      panel.appendChild(timerSpan);
+      panel.appendChild(player);
+      wrap.appendChild(panel);
+      c.el.appendChild(wrap);
+
+      let mediaRecorder = null;
+      let chunks = [];
+      let timerId = null;
+      let seconds = 0;
+      let audioDataUrl = '';
+
+      const updateTimer = () => {
+        seconds++;
+        const mins = String(Math.floor(seconds / 60)).padStart(2, '0');
+        const secs = String(seconds % 60).padStart(2, '0');
+        timerSpan.textContent = `${mins}:${secs}`;
+        if (p.max_duration && seconds >= p.max_duration) {
+          stopRecording();
+        }
+      };
+
+      const startRecording = async () => {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          toast('Microphone non disponible dans ce navigateur', 'error');
+          return;
+        }
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          chunks = [];
+          mediaRecorder = new MediaRecorder(stream);
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) chunks.push(e.data);
+          };
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'audio/webm' });
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              audioDataUrl = reader.result;
+              player.src = audioDataUrl;
+              player.style.display = 'block';
+              emit(c, 'change', audioDataUrl);
+            };
+            reader.readAsDataURL(blob);
+            stream.getTracks().forEach((track) => track.stop());
+          };
+          mediaRecorder.start();
+          seconds = 0;
+          timerSpan.textContent = '00:00';
+          timerId = setInterval(updateTimer, 1000);
+          recBtn.classList.add('recording');
+          recText.textContent = t('rec_stop', 'STOP');
+        } catch (err) {
+          toast('Accès micro refusé ou impossible', 'error');
+        }
+      };
+
+      const stopRecording = () => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+        clearInterval(timerId);
+        recBtn.classList.remove('recording');
+        recText.textContent = t('rec_rec', 'REC');
+      };
+
+      recBtn.addEventListener('click', () => {
+        if (recBtn.classList.contains('recording')) {
+          stopRecording();
+        } else {
+          startRecording();
+        }
+      });
+
+      c.getValue = () => audioDataUrl;
+      c.apply = (patch) => {
+        if (patch.value != null) {
+          audioDataUrl = String(patch.value);
+          player.src = audioDataUrl;
+          player.style.display = 'block';
+        }
+        if (patch.label != null) lab.innerHTML = '<span>' + esc(String(patch.label)) + '</span>';
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  /* ---------- Phase 8 Lot 4: HighlightedText / CodeDiff / Model3D ---------- */
+
+  register('highlightedtext', {
+    mount(c) {
+      const p = c.props;
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-highlighted-wrap';
+
+      const lab = document.createElement('div');
+      lab.className = 'mg-label';
+      lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      wrap.appendChild(lab);
+
+      const legend = document.createElement('div');
+      legend.className = 'mg-highlighted-legend';
+      wrap.appendChild(legend);
+
+      const content = document.createElement('div');
+      content.className = 'mg-highlighted-content';
+      wrap.appendChild(content);
+
+      c.el.appendChild(wrap);
+
+      let currentSegs = Array.isArray(p.segments) ? p.segments : [];
+      let colorMap = p.color_map && typeof p.color_map === 'object' ? { ...p.color_map } : {};
+
+      const defaultPalette = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#8b5cf6', '#ef4444', '#14b8a6'];
+      let colorIdx = 0;
+      const getColor = (tag) => {
+        if (!colorMap[tag]) {
+          colorMap[tag] = defaultPalette[colorIdx % defaultPalette.length];
+          colorIdx++;
+        }
+        return colorMap[tag];
+      };
+
+      const render = () => {
+        content.innerHTML = '';
+        legend.innerHTML = '';
+
+        const activeTags = new Set();
+        currentSegs.forEach((seg) => {
+          if (!seg || typeof seg.text !== 'string') return;
+          if (seg.label) {
+            activeTags.add(seg.label);
+            const color = getColor(seg.label);
+            const span = document.createElement('mark');
+            span.className = 'mg-highlighted-mark';
+            span.style.backgroundColor = color + '22';
+            span.style.borderBottomColor = color;
+
+            const textNode = document.createTextNode(seg.text);
+            const tagBadge = document.createElement('span');
+            tagBadge.className = 'mg-highlighted-tag';
+            tagBadge.style.backgroundColor = color;
+            tagBadge.textContent = seg.label;
+
+            span.appendChild(textNode);
+            span.appendChild(tagBadge);
+            content.appendChild(span);
+          } else {
+            content.appendChild(document.createTextNode(seg.text));
+          }
+        });
+
+        if (p.show_legend !== false && activeTags.size > 0) {
+          legend.style.display = 'flex';
+          activeTags.forEach((tag) => {
+            const item = document.createElement('div');
+            item.className = 'mg-highlighted-legend-item';
+            const dot = document.createElement('span');
+            dot.className = 'mg-highlighted-legend-dot';
+            dot.style.backgroundColor = getColor(tag);
+            const lbl = document.createElement('span');
+            lbl.textContent = tag;
+            item.appendChild(dot);
+            item.appendChild(lbl);
+            legend.appendChild(item);
+          });
+        } else {
+          legend.style.display = 'none';
+        }
+      };
+
+      render();
+
+      c.apply = (patch) => {
+        if (Array.isArray(patch.segments)) currentSegs = patch.segments;
+        if (Array.isArray(patch.value)) {
+          currentSegs = patch.value.map((x) => (Array.isArray(x) ? { text: x[0], label: x[1] } : x));
+        }
+        if (patch.color_map && typeof patch.color_map === 'object') {
+          colorMap = { ...colorMap, ...patch.color_map };
+        }
+        if (patch.label != null) lab.innerHTML = '<span>' + esc(String(patch.label)) + '</span>';
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+        render();
+      };
+    }
+  });
+
+  register('codediff', {
+    mount(c) {
+      const p = c.props;
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-diff-wrap';
+
+      const lab = document.createElement('div');
+      lab.className = 'mg-label';
+      lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      wrap.appendChild(lab);
+
+      const pre = document.createElement('div');
+      pre.className = 'mg-diff-body';
+      wrap.appendChild(pre);
+
+      c.el.appendChild(wrap);
+
+      let oldCode = p.old_code || '';
+      let newCode = p.new_code || '';
+
+      const computeDiff = (oldS, newS) => {
+        const oldLines = oldS.split('\n');
+        const newLines = newS.split('\n');
+        const diff = [];
+        let i = 0, j = 0;
+        let lineOld = 1, lineNew = 1;
+
+        while (i < oldLines.length || j < newLines.length) {
+          if (i < oldLines.length && j < newLines.length && oldLines[i] === newLines[j]) {
+            diff.push({ type: 'same', text: oldLines[i], oldNo: lineOld++, newNo: lineNew++ });
+            i++; j++;
+          } else if (j < newLines.length && (!oldLines.slice(i).includes(newLines[j]) || (oldLines[i] && newLines.slice(j).includes(oldLines[i])))) {
+            diff.push({ type: 'add', text: newLines[j], oldNo: '', newNo: lineNew++ });
+            j++;
+          } else if (i < oldLines.length) {
+            diff.push({ type: 'del', text: oldLines[i], oldNo: lineOld++, newNo: '' });
+            i++;
+          } else {
+            diff.push({ type: 'add', text: newLines[j], oldNo: '', newNo: lineNew++ });
+            j++;
+          }
+        }
+        return diff;
+      };
+
+      const render = () => {
+        pre.innerHTML = '';
+        const lines = computeDiff(oldCode, newCode);
+        lines.forEach((l) => {
+          const row = document.createElement('div');
+          row.className = 'mg-diff-line mg-diff-' + l.type;
+
+          const numOld = document.createElement('span');
+          numOld.className = 'mg-diff-no';
+          numOld.textContent = l.oldNo;
+
+          const numNew = document.createElement('span');
+          numNew.className = 'mg-diff-no';
+          numNew.textContent = l.newNo;
+
+          const marker = document.createElement('span');
+          marker.className = 'mg-diff-marker';
+          marker.textContent = l.type === 'add' ? '+' : l.type === 'del' ? '-' : ' ';
+
+          const code = document.createElement('span');
+          code.className = 'mg-diff-text';
+          code.textContent = l.text;
+
+          row.appendChild(numOld);
+          row.appendChild(numNew);
+          row.appendChild(marker);
+          row.appendChild(code);
+          pre.appendChild(row);
+        });
+      };
+
+      render();
+
+      c.apply = (patch) => {
+        if (patch.old_code != null) oldCode = String(patch.old_code);
+        if (patch.new_code != null) newCode = String(patch.new_code);
+        if (patch.value && typeof patch.value === 'object') {
+          if (patch.value.old_code != null) oldCode = String(patch.value.old_code);
+          if (patch.value.new_code != null) newCode = String(patch.value.new_code);
+        }
+        if (patch.label != null) lab.innerHTML = '<span>' + esc(String(patch.label)) + '</span>';
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+        render();
+      };
+    }
+  });
+
+  register('model3d', {
+    mount(c) {
+      const p = c.props;
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-model3d-wrap';
+
+      const lab = document.createElement('div');
+      lab.className = 'mg-label';
+      lab.innerHTML = '<span>' + esc(p.label || c.id) + '</span>';
+      wrap.appendChild(lab);
+
+      const container = document.createElement('div');
+      container.className = 'mg-model3d-box';
+
+      const canvas = document.createElement('canvas');
+      canvas.className = 'mg-model3d-canvas';
+      canvas.width = 400;
+      canvas.height = 300;
+      container.appendChild(canvas);
+
+      const hint = document.createElement('div');
+      hint.className = 'mg-model3d-hint';
+      const setHintText = () => { hint.textContent = t('m3d_hint', '🖱️ Glisser pour tourner · Molette pour zoomer'); };
+      setHintText();
+      onI18n(setHintText);
+      container.appendChild(hint);
+
+      wrap.appendChild(container);
+      c.el.appendChild(wrap);
+
+      // WebGL Renderer 3D natif (Cube / OBJ simple)
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      let rotX = 0.4;
+      let rotY = 0.6;
+      let zoom = 2.8;
+
+      const vsSource = `
+        attribute vec3 aPos;
+        attribute vec3 aNormal;
+        uniform mat4 uMVP;
+        uniform mat4 uModel;
+        varying vec3 vNormal;
+        void main() {
+          gl_Position = uMVP * vec4(aPos, 1.0);
+          vNormal = mat3(uModel) * aNormal;
+        }
+      `;
+      const fsSource = `
+        precision mediump float;
+        varying vec3 vNormal;
+        void main() {
+          vec3 light = normalize(vec3(0.5, 1.0, 0.8));
+          float diff = max(dot(normalize(vNormal), light), 0.2);
+          vec3 baseCol = vec3(0.39, 0.40, 0.95);
+          gl_FragColor = vec4(baseCol * diff, 1.0);
+        }
+      `;
+
+      function createShader(gl, type, src) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        return s;
+      }
+
+      let prog = null;
+      let posBuf = null;
+      let normBuf = null;
+      let idxBuf = null;
+      let indexCount = 0;
+
+      if (gl) {
+        prog = gl.createProgram();
+        gl.attachShader(prog, createShader(gl, gl.VERTEX_SHADER, vsSource));
+        gl.attachShader(prog, createShader(gl, gl.FRAGMENT_SHADER, fsSource));
+        gl.linkProgram(prog);
+
+        // Cube par défaut
+        const vertices = new Float32Array([
+          -0.7,-0.7, 0.7,  0.7,-0.7, 0.7,  0.7, 0.7, 0.7, -0.7, 0.7, 0.7,
+          -0.7,-0.7,-0.7, -0.7, 0.7,-0.7,  0.7, 0.7,-0.7,  0.7,-0.7,-0.7,
+          -0.7, 0.7,-0.7, -0.7, 0.7, 0.7,  0.7, 0.7, 0.7,  0.7, 0.7,-0.7,
+          -0.7,-0.7,-0.7,  0.7,-0.7,-0.7,  0.7,-0.7, 0.7, -0.7,-0.7, 0.7,
+           0.7,-0.7,-0.7,  0.7, 0.7,-0.7,  0.7, 0.7, 0.7,  0.7,-0.7, 0.7,
+          -0.7,-0.7,-0.7, -0.7,-0.7, 0.7, -0.7, 0.7, 0.7, -0.7, 0.7,-0.7
+        ]);
+        const normals = new Float32Array([
+           0, 0, 1,   0, 0, 1,   0, 0, 1,   0, 0, 1,
+           0, 0,-1,   0, 0,-1,   0, 0,-1,   0, 0,-1,
+           0, 1, 0,   0, 1, 0,   0, 1, 0,   0, 1, 0,
+           0,-1, 0,   0,-1, 0,   0,-1, 0,   0,-1, 0,
+           1, 0, 0,   1, 0, 0,   1, 0, 0,   1, 0, 0,
+          -1, 0, 0,  -1, 0, 0,  -1, 0, 0,  -1, 0, 0
+        ]);
+        const indices = new Uint16Array([
+           0, 1, 2,   0, 2, 3,    4, 5, 6,   4, 6, 7,
+           8, 9,10,   8,10,11,   12,13,14,  12,14,15,
+          16,17,18,  16,18,19,   20,21,22,  20,22,23
+        ]);
+        indexCount = indices.length;
+
+        posBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+        normBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, normBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, normals, gl.STATIC_DRAW);
+
+        idxBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+      }
+
+      function draw() {
+        if (!gl || !prog) return;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.clearColor(0.12, 0.16, 0.23, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.enable(gl.DEPTH_TEST);
+
+        gl.useProgram(prog);
+
+        const aPos = gl.getAttribLocation(prog, 'aPos');
+        gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+        gl.enableVertexAttribArray(aPos);
+        gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+
+        const aNorm = gl.getAttribLocation(prog, 'aNormal');
+        gl.bindBuffer(gl.ARRAY_BUFFER, normBuf);
+        gl.enableVertexAttribArray(aNorm);
+        gl.vertexAttribPointer(aNorm, 3, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+
+        // Matrices MVP simplifiées
+        const aspect = canvas.width / canvas.height;
+        const fov = 45 * Math.PI / 180;
+        const f = 1.0 / Math.tan(fov / 2);
+        const near = 0.1, far = 100.0;
+        const proj = [
+          f / aspect, 0, 0, 0,
+          0, f, 0, 0,
+          0, 0, (far + near) / (near - far), -1,
+          0, 0, (2 * far * near) / (near - far), 0
+        ];
+
+        // Rotation & translation modèle
+        const cx = Math.cos(rotX), sx = Math.sin(rotX);
+        const cy = Math.cos(rotY), sy = Math.sin(rotY);
+        const model = [
+          cy, sx * sy, -cx * sy, 0,
+          0, cx, sx, 0,
+          sy, -sx * cy, cx * cy, 0,
+          0, 0, -zoom, 1
+        ];
+
+        // Multiplication simple Proj * Model
+        const mvp = new Float32Array(16);
+        for (let r = 0; r < 4; r++) {
+          for (let c = 0; c < 4; c++) {
+            let sum = 0;
+            for (let k = 0; k < 4; k++) sum += proj[r + k * 4] * model[k + c * 4];
+            mvp[r + c * 4] = sum;
+          }
+        }
+
+        gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'uMVP'), false, mvp);
+        gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'uModel'), false, new Float32Array(model));
+
+        gl.drawElements(gl.TRIANGLES, indexCount, gl.UNSIGNED_SHORT, 0);
+      }
+
+      draw();
+
+      let dragging = false;
+      let lastX = 0, lastY = 0;
+      canvas.addEventListener('mousedown', (e) => {
+        dragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        rotY += dx * 0.01;
+        rotX += dy * 0.01;
+        draw();
+      });
+      window.addEventListener('mouseup', () => { dragging = false; });
+      canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        zoom = Math.max(1.2, Math.min(8.0, zoom + e.deltaY * 0.003));
+        draw();
+      }, { passive: false });
+
+      c.apply = (patch) => {
+        if (patch.label != null) lab.innerHTML = '<span>' + esc(String(patch.label)) + '</span>';
+        if (patch.visible != null) c.el.hidden = !patch.visible;
+      };
+    }
+  });
+
+  register('html', {
+    mount(c) {
+      const p = c.props;
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-html-wrap';
+
+      if (p.label) {
+        const lab = document.createElement('div');
+        lab.className = 'mg-label';
+        lab.innerHTML = '<span>' + esc(p.label) + '</span>';
+        wrap.appendChild(lab);
+      }
+
+      const container = document.createElement('div');
+      container.className = 'mg-html-container';
+      wrap.appendChild(container);
+      c.el.appendChild(wrap);
+
+      let currentValue = p.value || '';
+      let cleanups = [];
+
+      // 1. Évaluation et injection propre du HTML avec exécution scopée des <script>
+      const setContent = (rawHtml) => {
+        // Exécution des nettoyages précédents
+        cleanups.forEach((fn) => { try { fn(); } catch (_) {} });
+        cleanups = [];
+
+        container.innerHTML = rawHtml;
+
+        // Extraction et exécution scopée des balises <script>
+        const scripts = container.querySelectorAll('script');
+        scripts.forEach((oldScript) => {
+          const newScript = document.createElement('script');
+          Array.from(oldScript.attributes).forEach((attr) => {
+            newScript.setAttribute(attr.name, attr.value);
+          });
+          if (oldScript.src) {
+            newScript.src = oldScript.src;
+          } else {
+            // Scope sécurisé injectant 'element' et 'grio'
+            newScript.textContent = `(function(element, grio) {\n${oldScript.textContent}\n})(document.querySelector('[data-id="${c.id}"] .mg-html-container'), window.grio);`;
+          }
+          oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
+      };
+
+      // 2. Délégation d'événements robuste (Event Delegation)
+      // Capture les interactions même si le HTML interne est reconstruit dynamiquement
+      container.addEventListener('click', (e) => {
+        const target = e.target.closest('[data-grio-action], [data-grio-click], button, a');
+        if (!target || !container.contains(target)) return;
+
+        const action = target.dataset.grioAction || target.dataset.grioClick || 'click';
+        let payload = target.dataset.grioPayload;
+        if (payload) {
+          try { payload = JSON.parse(payload); } catch (_) {}
+        } else {
+          payload = target.value || target.getAttribute('href') || null;
+        }
+
+        emit(c, action, payload);
+      });
+
+      container.addEventListener('change', (e) => {
+        const target = e.target.closest('input, select, textarea, [data-grio-change]');
+        if (!target || !container.contains(target)) return;
+
+        let val;
+        if (target.type === 'checkbox') {
+          val = target.checked;
+        } else {
+          val = target.value;
+        }
+        currentValue = val;
+        emit(c, 'change', val);
+      });
+
+      container.addEventListener('input', (e) => {
+        const target = e.target.closest('[data-grio-input]');
+        if (!target || !container.contains(target)) return;
+        emit(c, 'change', target.value);
+      });
+
+      setContent(currentValue);
+
+      c.getValue = () => currentValue;
+      c.apply = (patch) => {
+        if (patch.value != null) {
+          currentValue = String(patch.value);
+          setContent(currentValue);
         }
         if (patch.visible != null) c.el.hidden = !patch.visible;
       };
@@ -2335,7 +3590,9 @@
       add_row: "+ Add Row",
       empty_chat: "Start the conversation...",
       model_weights_loaded: "Model weights loaded successfully",
-      file_drop: "Click or drop files here",
+      file_drop: "Click or drop files here to upload",
+      file_browse: "Browse...",
+      file_empty: "No files uploaded",
       file_remove: "remove",
       file_type_bad: "type not allowed",
       file_too_big: "file too large",
@@ -2344,6 +3601,47 @@
       download_label: "Download",
       num_step_down: "decrease",
       num_step_up: "increase",
+      // ImageEditor & Canvas tools
+      ie_open: "Open",
+      ie_open_title: "Upload an image",
+      ie_brush: "Brush",
+      ie_eraser: "Eraser",
+      ie_rect: "Rectangle",
+      ie_line: "Line",
+      ie_arrow: "Arrow",
+      ie_crop: "Crop",
+      ie_pan: "Move",
+      ie_color: "Color",
+      ie_size: "Thickness",
+      ie_rotate: "Rotate",
+      ie_filters: "Filters",
+      ie_f_gray: "Grayscale (B&W)",
+      ie_f_invert: "Invert",
+      ie_f_bright: "Brighten",
+      ie_f_dark: "Darken",
+      ie_f_blur: "Gaussian Blur",
+      ie_undo: "Undo",
+      ie_redo: "Redo",
+      ie_reset: "Reset",
+      ie_layers: "Layers",
+      ie_layer: "Layer",
+      ie_visibility: "Visibility",
+      media_choose_audio: "Choose Audio",
+      media_choose_video: "Choose Video",
+      media_record: "Record",
+      media_stop: "Stop",
+      media_camera: "Camera",
+      media_stop_camera: "Stop Camera",
+      rec_rec: "REC",
+      rec_stop: "STOP",
+      m3d_hint: "🖱️ Drag to rotate · Wheel to zoom",
+      // Showcase tabs & elements
+      tab_controls: "🎛️ Forms & Controls",
+      tab_media: "🖼️ Media & Vision",
+      tab_data: "📊 Data, Files & Code",
+      tab_chat: "🤖 Chatbot & Observability",
+      tab_system: "⚙️ System, Gauges & Docs",
+      run_label: "Test Submission (Run)",
     },
     fr: {
       use_api: "Utiliser via API",
@@ -2363,7 +3661,9 @@
       add_row: "+ Ajouter une ligne",
       empty_chat: "Commencez la conversation...",
       model_weights_loaded: "Poids du modèle chargés avec succès",
-      file_drop: "Cliquez ou glissez des fichiers ici",
+      file_drop: "Cliquez ou glissez des fichiers ici pour téléverser",
+      file_browse: "Parcourir vos fichiers...",
+      file_drop_sub: "Glissez-déposez des documents ou parcourez",
       file_remove: "retirer",
       file_type_bad: "type non autorisé",
       file_too_big: "fichier trop volumineux",
@@ -2372,6 +3672,47 @@
       download_label: "Télécharger",
       num_step_down: "diminuer",
       num_step_up: "augmenter",
+      // ImageEditor & Canvas tools
+      ie_open: "Ouvrir",
+      ie_open_title: "Charger une image",
+      ie_brush: "Pinceau",
+      ie_eraser: "Gomme",
+      ie_rect: "Rectangle",
+      ie_line: "Ligne",
+      ie_arrow: "Flèche",
+      ie_crop: "Rogner",
+      ie_pan: "Déplacer",
+      ie_color: "Couleur",
+      ie_size: "Épaisseur",
+      ie_rotate: "Rotation",
+      ie_filters: "Filtres",
+      ie_f_gray: "Gris (N&B)",
+      ie_f_invert: "Négatif",
+      ie_f_bright: "Éclaircir",
+      ie_f_dark: "Assombrir",
+      ie_f_blur: "Flou gaussien",
+      ie_undo: "Annuler",
+      ie_redo: "Rétablir",
+      ie_reset: "Reset",
+      ie_layers: "Calques",
+      ie_layer: "Calque",
+      ie_visibility: "Visibilité",
+      media_choose_audio: "Choisir un audio",
+      media_choose_video: "Choisir une vidéo",
+      media_record: "Enregistrer",
+      media_stop: "Arrêter",
+      media_camera: "Caméra",
+      media_stop_camera: "Stop caméra",
+      rec_rec: "REC",
+      rec_stop: "STOP",
+      m3d_hint: "🖱️ Glisser pour tourner · Molette pour zoomer",
+      // Showcase tabs & elements
+      tab_controls: "🎛️ Formulaires & Contrôles",
+      tab_media: "🖼️ Médias & Vision",
+      tab_data: "📊 Données, Fichiers & Code",
+      tab_chat: "🤖 Chatbot & Observabilité",
+      tab_system: "⚙️ Système, Jauges & Doc",
+      run_label: "Tester la soumission (Run)",
     },
     es: {
       use_api: "Usar vía API",
@@ -2392,6 +3733,8 @@
       empty_chat: "Comience la conversación...",
       model_weights_loaded: "Pesos del modelo cargados con éxito",
       file_drop: "Haga clic o arrastre archivos aquí",
+      file_browse: "Examinar archivos...",
+      file_drop_sub: "Arrastre documentos o examine",
       file_remove: "quitar",
       file_type_bad: "tipo no permitido",
       file_too_big: "archivo demasiado grande",
@@ -2400,6 +3743,47 @@
       download_label: "Descargar",
       num_step_down: "disminuir",
       num_step_up: "aumentar",
+      // ImageEditor & Canvas tools
+      ie_open: "Abrir",
+      ie_open_title: "Cargar una imagen",
+      ie_brush: "Pincel",
+      ie_eraser: "Borrador",
+      ie_rect: "Rectángulo",
+      ie_line: "Línea",
+      ie_arrow: "Flecha",
+      ie_crop: "Recortar",
+      ie_pan: "Mover",
+      ie_color: "Color",
+      ie_size: "Grosor",
+      ie_rotate: "Rotar",
+      ie_filters: "Filtros",
+      ie_f_gray: "Gris (B/N)",
+      ie_f_invert: "Invertir",
+      ie_f_bright: "Aclarar",
+      ie_f_dark: "Oscurecer",
+      ie_f_blur: "Desenfoque",
+      ie_undo: "Deshacer",
+      ie_redo: "Rehacer",
+      ie_reset: "Restablecer",
+      ie_layers: "Capas",
+      ie_layer: "Capa",
+      ie_visibility: "Visibilidad",
+      media_choose_audio: "Elegir audio",
+      media_choose_video: "Elegir vídeo",
+      media_record: "Grabar",
+      media_stop: "Parar",
+      media_camera: "Cámara",
+      media_stop_camera: "Detener cámara",
+      rec_rec: "REC",
+      rec_stop: "STOP",
+      m3d_hint: "🖱️ Arrastrar para rotar · Rueda para zoom",
+      // Showcase tabs & elements
+      tab_controls: "🎛️ Formularios y Controles",
+      tab_media: "🖼️ Medios y Visión",
+      tab_data: "📊 Datos, Archivos y Código",
+      tab_chat: "🤖 Chatbot y Observabilidad",
+      tab_system: "⚙️ Sistema, Indicadores y Docs",
+      run_label: "Probar Envío (Run)",
     },
     de: {
       use_api: "Über API nutzen",
@@ -2420,6 +3804,8 @@
       empty_chat: "Beginnen Sie das Gespräch...",
       model_weights_loaded: "Modellgewichte erfolgreich geladen",
       file_drop: "Klicken oder Dateien hierher ziehen",
+      file_browse: "Dateien durchsuchen...",
+      file_drop_sub: "Dokumente ablegen oder durchsuchen",
       file_remove: "entfernen",
       file_type_bad: "Typ nicht erlaubt",
       file_too_big: "Datei zu groß",
@@ -2428,6 +3814,47 @@
       download_label: "Herunterladen",
       num_step_down: "verringern",
       num_step_up: "erhöhen",
+      // ImageEditor & Canvas tools
+      ie_open: "Öffnen",
+      ie_open_title: "Bild laden",
+      ie_brush: "Pinsel",
+      ie_eraser: "Radierer",
+      ie_rect: "Rechteck",
+      ie_line: "Linie",
+      ie_arrow: "Pfeil",
+      ie_crop: "Zuschneiden",
+      ie_pan: "Verschieben",
+      ie_color: "Farbe",
+      ie_size: "Stärke",
+      ie_rotate: "Drehen",
+      ie_filters: "Filter",
+      ie_f_gray: "Graustufen (S/W)",
+      ie_f_invert: "Invertieren",
+      ie_f_bright: "Aufhellen",
+      ie_f_dark: "Abdunkeln",
+      ie_f_blur: "Weichzeichnen",
+      ie_undo: "Rückgängig",
+      ie_redo: "Wiederholen",
+      ie_reset: "Zurücksetzen",
+      ie_layers: "Ebenen",
+      ie_layer: "Ebene",
+      ie_visibility: "Sichtbarkeit",
+      media_choose_audio: "Audio wählen",
+      media_choose_video: "Video wählen",
+      media_record: "Aufnehmen",
+      media_stop: "Stopp",
+      media_camera: "Kamera",
+      media_stop_camera: "Kamera stoppen",
+      rec_rec: "AUFNAHME",
+      rec_stop: "STOPP",
+      m3d_hint: "🖱️ Ziehen zum Drehen · Mausrad für Zoom",
+      // Showcase tabs & elements
+      tab_controls: "🎛️ Formulare & Steuerelemente",
+      tab_media: "🖼️ Medien & Bilderkennung",
+      tab_data: "📊 Daten, Dateien & Code",
+      tab_chat: "🤖 Chatbot & Beobachtbarkeit",
+      tab_system: "⚙️ System, Anzeigen & Dokumentation",
+      run_label: "Absenden testen (Run)",
     }
   };
 

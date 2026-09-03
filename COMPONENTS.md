@@ -201,6 +201,53 @@ Dropdown::new("model")
 
 ---
 
+### `Radio` (Radio Group & Pills)
+Mutually exclusive selector with either segmented pill button appearance or traditional radio circles.
+
+```rust
+Radio::new("arch")
+    .label("Architecture")
+    .choices(&["transformer", "mamba", "diffusion"])
+    .value("mamba")
+    .style("pills") // "pills" or "radio"
+    .direction("horizontal") // "horizontal" or "vertical"
+```
+
+- **Data format**: `String` via `ctx.get::<String>("arch")?` or `ctx.get_str("arch")?`.
+
+---
+
+### `SliderRange` (Interval / Dual-Thumb Slider)
+Dual-thumb slider allowing selection of bounded ranges `[min_val, max_val]`.
+
+```rust
+SliderRange::new("confidence")
+    .label("Confidence Range")
+    .min(0.0)
+    .max(1.0)
+    .step(0.01)
+    .value(0.20, 0.80)
+    .unit("%")
+```
+
+- **Data format**: `(f64, f64)` or `[f64; 2]` via `ctx.get::<(f64, f64)>("confidence")?`.
+
+---
+
+### `ColorPicker`
+Color selector featuring native palette picker, hex code input, and quick swatches.
+
+```rust
+ColorPicker::new("accent")
+    .label("Highlight Color")
+    .value("#6366f1")
+    .presets(&["#6366f1", "#10b981", "#ef4444", "#f59e0b", "#000000", "#ffffff"])
+```
+
+- **Data format**: `String` via `ctx.get::<String>("accent")?`.
+
+---
+
 ### `Dataframe`
 Interactive, editable tabular spreadsheet.
 
@@ -331,6 +378,35 @@ Grid of previewable images with click-to-select interaction.
 Gallery::new("generated_images")
     .label("Diffusion Outputs")
     .columns(4)
+### `Progress` (Progress Bar, Circular Ring, or Pie Chart)
+Real-time progress indicator driven by `ctx.progress(id, fraction, label)`.
+Supports 3 modern display variants:
+- **`bar`** (default): Horizontal progress bar with animated gradient and completion glow.
+- **`circle`** : Circular SVG ring gauge with centered percentage and status label.
+- **`pie`** : Conic-gradient pie chart with percentage badge.
+
+```rust
+// 1. Classic Horizontal Bar
+Progress::new("dl_bar")
+    .label("Downloading model weights")
+    .bar()
+
+// 2. Circular SVG Ring Gauge
+Progress::new("epoch_circle")
+    .label("Epoch Progress")
+    .circle()
+    .size(96) // Diameter in pixels
+
+// 3. Conic Pie Chart
+Progress::new("vram_pie")
+    .label("VRAM Allocation")
+    .pie()
+    .size(80)
+```
+
+- **Updating Progress in Handlers**:
+```rust
+ctx.progress("epoch_circle", 0.85, "Epoch 85/100 · Loss: 0.12");
 ```
 
 ---
@@ -447,6 +523,45 @@ ImageEditor::new("editor")
     .layers(2) // Outputs { image, layers, mask } on change
 ```
 
+### `AnnotatedImage` (Object Detection & Bounding Boxes)
+Displays an image with vector bounding boxes, class labels, and confidence tags (e.g. YOLO, SAM, RT-DETR).
+
+```rust
+AnnotatedImage::new("detection")
+    .label("YOLOv11 Detections")
+    .image("https://example.com/photo.jpg")
+    .box_norm(0.12, 0.28, 0.72, 0.72, "person", Some(0.96), "#6366f1")
+    .box_norm(0.65, 0.35, 0.95, 0.65, "clothing", Some(0.88), "#10b981")
+```
+
+- Update server-side via `ctx.set("detection", json!({ "image": "...", "boxes": [...] }))`.
+
+---
+
+### `ImageComparison` (Before / After Slider)
+Interactive side-by-side comparison with a draggable curtain divider (ideal for Super-Resolution, Denoising, Colorization, and Upscaling).
+
+```rust
+ImageComparison::new("sr_eval")
+    .label("Super-Resolution 4x Comparison")
+    .before("https://example.com/lowres.jpg", "Original (Low-Res)")
+    .after("https://example.com/highres.jpg", "Upscaled (ESRGAN)")
+    .position(50.0)
+```
+
+---
+
+### `AudioRecorder`
+Dedicated direct microphone recorder with REC button, live pulsing animation, timer, and automatic export for Whisper / Speech-to-Text pipelines.
+
+```rust
+AudioRecorder::new("voice_prompt")
+    .label("Record Audio Prompt")
+    .max_duration(30.0)
+```
+
+- **Data format**: Data URL `String` (`data:audio/webm;base64,...`) readable via `ctx.get::<String>("voice_prompt")?`.
+
 ---
 
 ### `Audio` (Speech-to-Text & Text-to-Speech)
@@ -505,6 +620,84 @@ Video::new("webcam")
     .live(true)
 ```
 Captures webcam frames and streams chunks to the server via WebSocket. Also supports transport lifecycle hooks (`on_play`, `on_pause`, `on_stop`).
+
+---
+
+### `HighlightedText` (NLP / Named Entity Recognition)
+Renders rich text with color-coded entity spans, label badges, and an automatic color legend bar.
+
+```rust
+HighlightedText::new("ner_output")
+    .label("Named Entity Recognition (NER)")
+    .segments(&[
+        ("Google ", Some("ORG")),
+        ("was founded by ", None),
+        ("Larry Page ", Some("PER")),
+        ("and ", None),
+        ("Sergey Brin ", Some("PER")),
+        ("at ", None),
+        ("Stanford University", Some("LOC")),
+    ])
+    .color_map(&[("ORG", "#6366f1"), ("PER", "#10b981"), ("LOC", "#f59e0b")])
+    .show_legend(true)
+```
+
+- **Update from server**: `ctx.set("ner_output", json!([["Paris", "LOC"], [" is nice.", null]]))`.
+
+---
+
+### `CodeDiff` (AI Code Refactoring & Diff Viewer)
+Comparative code diff viewer with line additions (`+` green), deletions (`-` red), and line numbering.
+
+```rust
+CodeDiff::new("diff_view")
+    .label("Refactoring Diff")
+    .old_code("fn compute(x: f64) -> f64 {\n    x * 2.0\n}")
+    .new_code("fn compute(x: f64) -> f64 {\n    x.mul_add(2.0, 1.0)\n}")
+    .language("rust")
+    .split_view(false)
+```
+
+---
+
+### `Model3D` (3D Mesh & Generative 3D Viewer)
+Lightweight 3D mesh viewer supporting Wavefront OBJ files with interactive orbit rotation and zoom controls (zero external dependencies).
+
+```rust
+Model3D::new("viewer_3d")
+    .label("3D Generated Mesh")
+    .value("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3") // raw OBJ string or data URL
+    .clear_color("#1e293b")
+    .interactive(true)
+```
+
+---
+
+### `Html` (Custom HTML, CSS & Scoped JavaScript)
+Embeds raw HTML, inline CSS, and executable `<script>` blocks with **robust event delegation** and a dedicated client bridge `window.grio`.
+
+```rust
+Html::new("my_custom_widget")
+    .label("Custom Metric Dashboard")
+    .value(r#"
+        <div class="my-box">
+            <button data-grio-action="click" data-grio-payload='{"action":"refresh"}'>Refresh</button>
+            <input type="text" data-grio-change placeholder="Type something...">
+        </div>
+        <script>
+            // Scoped execution: 'element' is the container, 'grio' is window.grio
+            grio.on("my_custom_widget", (patch) => {
+                console.log("Updated from Rust server:", patch);
+            });
+        </script>
+    "#)
+```
+
+#### The `window.grio` JavaScript Bridge:
+- `window.grio.emit(componentId, eventName, data)` : Dispatches an event directly to the Rust WebSocket loop.
+- `window.grio.on(componentId, callback)` : Subscribes to real-time state updates sent by `ctx.set(id, ...)`.
+- `window.grio.get(componentId)` : Reads the current value of any input component on the page.
+- `window.grio.toast(message, level)` : Triggers native toaster alerts.
 
 ---
 

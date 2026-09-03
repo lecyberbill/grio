@@ -1,295 +1,161 @@
-# Roadmap grio
+# grio Roadmap
 
-> Document maintenu au fil du développement. Chaque fonctionnalité livrée
-> coche sa case, met à jour le code (`///`), la doc (`README.md`) et cette
-> roadmap. Sources d'inspiration : guide Gradio *Blocks and Event Listeners*
-> et les fonctions *Queuing, Streaming Outputs, Streaming Inputs, Alerts,
-> Progress Bars*.
+> Living document maintained throughout development. Each delivered feature
+> checks its box, updates doc comments (`///`), documentation (`README.md`, `COMPONENTS.md`),
+> and this roadmap. Inspired by the Gradio *Blocks and Event Listeners* guide
+> as well as *Queuing, Streaming Outputs, Streaming Inputs, Alerts, and Progress Bars*.
 
-## Où on en est (base)
+## Current Status (Foundation)
 
-Déjà en place :
-- [x] Moteur : serveur `axum` + rendu UI (CSS3 + JS vanilla, registre `MG.register`)
-- [x] Composants : `Text`, `Slider`, `Output`, `Markdown`, `Button`
-- [x] Conteneurs : `Row`, `Column`, `Panel` + racine
-- [x] Événements : `on_submit`, `on_change(id)`, `on_click(id)`, `on_event(nom)` + bus `ctx.emit`
-- [x] Rôle déclaratif `Role::Input/Output` → API REST auto (`/api/predict`, `/api/schema`)
-- [x] Console bavarde (`[http]`, `[ws]`, `[api]`) désactivable (`.quiet()`)
-- [x] Docs : `#![warn(missing_docs)]` + `README.md`
+Already implemented:
+- [x] Engine: `axum` server + UI rendering (CSS3 + Vanilla JS, zero frontend dependencies, `MG.register`)
+- [x] Core Components: `Text`, `Slider`, `Output`, `Markdown`, `Button`
+- [x] Containers: `Row`, `Column`, `Panel`, `Grid`, `Tabs`, `Accordion`
+- [x] Event Model: `on_submit`, `on_change(id)`, `on_click(id)`, `on("event", [ids], fn)` + internal bus `ctx.emit`
+- [x] Declarative Roles: `Role::Input/Output` → auto REST API (`/api/predict`, `/api/schema`, `/docs`, `/api/openapi.json`)
+- [x] Verbose Console: (`[http]`, `[ws]`, `[api]`, `[run]`), quiet mode toggleable (`.quiet()`)
+- [x] Documentation: `#![warn(missing_docs)]` + `README.md` + [COMPONENTS.md](COMPONENTS.md)
 
-Légende : **[P0]** prioritaire · **[P1]** souhaitable · **[P2]** à l'étude
-
----
-
-## Phase 1 — Interaction avancée (inspiration : Blocks) · [P0]
-
-> **Livrée.** Écart assumé : le **flux** n'est pas déclaré à la Gradio
-> (`inputs=`/`outputs=` à l'appel) mais par chaînage **`.flow(inputs,
-> outputs)`** appliqué au dernier handler — même effet (scoping strict des
-> lectures/écritures). Le **chaînage** `.then/.success/.failure` s'attache lui
-> aussi au dernier handler. Tous les critères ont été joués à la main sur les
-> tests WebSocket (`examples/blocks.rs`) : voir le détail de chaque item.
-
-### 1.1 Événements par composant avec flux déclarés · ✅
-`.flow(["a","b"], ["cmp_out"])` déclare les entrées lisibles et les sorties
-écrivables d'un handler ; tout accès hors liste est **rejeté en lecture**
-(`get` → erreur) et **ignoré en écriture** (`set`/`set_prop`/`append`/
-`progress`). Plusieurs flux indépendants coexistent sans `on_submit`.
-- **Fichiers** : `app.rs` (`HandlerDef.inputs/outputs`, `App::flow`), `context.rs` (`set_flow`, gardes)
-- **Accepté quand** : démo « a > b / b > a » de Gradio répliquée dans
-  `examples/blocks.rs` — deux boutons, deux handlers scopés (testé).
-
-### 1.2 Chaînage d'événements `.then()` / `.success()` / `.failure()` · ✅
-Chaque handler principal accepte une **chaîne** de maillons : `then` (toujours),
-`success` (si succès), `failure` (si échec — un `failure` qui réussit
-**récupère** et réactive les `success` suivants).
-- **Fichiers** : `app.rs` (`Sibling`, `RunCond`, `handler.chain`, `run_handler`)
-- **Accepté quand** : chatbot dans `examples/blocks.rs` —
-  `on_submit(user_fn).then(bot_fn)` affiche la réponse **en streaming** après le
-  message (testé : fragments `Vous : …` puis `Bot : ****** (réponse simulée)`).
-
-### 1.3 Données d'événement exposées au handler · ✅
-`ctx.event() -> Option<&WireEvent>` expose la cible (`c`), l'action (`e`), les
-données (`d`) et l'instantané (`v`). Le `WireEvent` est enregistré dans le
-`Context` par `server::run_event`.
-- **Fichiers** : `context.rs` (`Context.event`, accesseur), `server.rs` (clone du wire)
-- **Accepté quand** : le handler `cmp_lt` affiche `(vu depuis `cmp_lt`)` — testé.
-
-### 1.4 `gr.skip()` / patch de toute prop (`gr.update`) · ✅
-- `ctx.skip("id")` / `ctx.unskip` : les écritures suivantes sur `id` sont
-  ignorées — testé (out_b figé alors que out_a est mis à jour).
-- `ctx.set_prop("id", "visible"|"label", v)` était déjà là ; le front `apply`
-  des sorties/boutons gère désormais `visible`/`disabled`/`label` — testé
-  (masquage d'un `Output` + changement de libellé d'un bouton).
-- **Fichiers** : `context.rs` (`skip`/`unskip`/`skipped`), `app.js`, `styles.css`
-
-### 1.5 Interactivité explicite · ✅
-`.interactive(bool)` sur `Text` et `Slider` : prop transmise en `props`,
-champ **grisé et non éditable** (`disabled`) mais toujours inclus dans le
-snapshot d'entrées.
-- **Fichiers** : `components.rs` (Text/Slider), `app.js` (disabled), `styles.css` (.mg-disabled)
-- **Accepté quand** : `Text::new("ro").interactive(false)` figé dans
-  `examples/blocks.rs` (rendu vérifié au HTML).
-
-### 1.6 Événement `load` (montage de la page) · ✅
-`App::on_load(fn)` : émis par le client à l'**ouverture du WebSocket**
-(`{t:'event', c:'', e:'load'}`), distribué comme un événement classique,
-`server` loggue `load (page)`.
-- **Fichiers** : `events.rs` (`EventName::Load`), `app.rs` (`on_load`),
-  `app.js` (émission), `server.rs` (bannière + log)
-- **Accepté quand** : testé — à la connexion WS, `load_note` reçoit
-  « Page montée — événement `load` reçu par le serveur ».
-
-### 1.7 Multi-déclencheurs `gr.on` · ✅
-`App::on("click"|"change", [ids…], fn)` lie la **même** fonction (partagée via
-`Arc<HandlerFn>`) à plusieurs composants ; `ctx.event()` différencie la cible.
-- **Fichiers** : `app.rs` (`App::on`, `HandlerFn = Arc<…>`)
-- **Accepté quand** : deux boutons « Option A/B » → le dernier cliqué est
-  affiché (`Dernier clic : opt_a`) — testé.
-
-### 1.8 Layout avancé : onglets et repli · ✅
-- `Tabs::new(id).tab(label, builder)` : barre + panneaux, **pilotés client**
-  (JS bascule `mg-active`, ouvrable au rendu, indexés `data-i`).
-- `Accordion::new(id).section(label, builder)` : `<details>/<summary>` natifs —
-  repli intégré navigateur, prop `open` pour déplier la première section.
-- **Fichiers** : `components.rs` (SectionBuilder, Tabs, Accordion),
-  `server.rs` (rendu), `app.js` (câblage onglets), `styles.css` (.mg-tabs-*,
-  .mg-accordion-*)
-- **Accepté quand** : `examples/blocks.rs` — 2 onglets + 2 sections,
-  structure vérifiée dans le HTML servi.
+Legend: **[P0]** High priority · **[P1]** Desirable · **[P2]** Under evaluation
 
 ---
 
-## Phase 2 — Temps réel (Queuing, Streaming Outputs, Alerts, Progress) · [P0]
+## Phase 1 — Advanced Interaction (Blocks Inspiration) · [P0]
 
-> **Livré.** Écart d'implémentation assumé : les handlers restent **synchrones**
-> — le moteur les exécute sur `spawn_blocking` (payload `tokio`) dans une file
-> sérialisée, donc `sleep`/boucles longues ne gèlent plus rien. L'annulation se
-> fait à l'**enfilement** (un re-déclenchement de la même cible+action pose le
-> flag immédiatement), et non à la consommation — nécessaire car la file est
-> séquentielle.
-> Vérifié : build zéro warning, streaming dédupliqué (pas de doublon entre le
-> push temps réel et la réponse finale), annulation + alertes + progress testés
-> via WebSocket sur `examples/greet.rs`.
+> **Delivered.** Design decision: the **flow** is not declared inline at function call
+> like Gradio (`inputs=`/`outputs=`), but via builder chaining **`.flow(inputs, outputs)`**
+> applied to the handler — achieving the same strict scoping for reads and writes.
+> Chaining `.then/.success/.failure` also attaches directly to the handler.
+> All criteria verified over WebSocket integration tests (`examples/blocks.rs`).
 
-### 2.1 Handlers async + émission poussée · ✅
-`ctx.set` / `ctx.append` / `ctx.progress` / `ctx.alert` poussent immédiatement
-sur le broadcast WS pendant qu'un handler long tourne (sur `spawn_blocking`).
-- **Fichiers** : `server.rs` (`dispatcher`, `run_event`), `context.rs` (envoyeur `push`)
-- **Accepté quand** : boucle 10×`append`+`progress` + `sleep` → l'UI se met à
-  jour en direct (testé : 10 fragments, 10 points de progress, 1 alerte).
+### 1.1 Per-Component Events with Declared Flow · ✅
+`.flow(["a", "b"], ["cmp_out"])` declares readable inputs and writable outputs
+for a handler; any unauthorized access is **rejected on read** (`get` → error)
+and **ignored on write** (`set`/`set_prop`/`append`/`progress`). Multiple independent
+flows coexist seamlessly without `on_submit`.
+- **Files**: `app.rs` (`HandlerDef.inputs/outputs`, `App::flow`), `context.rs` (`set_flow`, guards)
+- **Accepted when**: Gradio's "a > b / b > a" replicated in `examples/blocks.rs` with scoped handlers.
 
-### 2.2 Queuing & annulation (à la Gradio) · ✅
-File `tokio::mpsc` sérialisée : ordre stable, pas de chevauchement de handlers.
-L'annulation sur re-déclenchement (composant + événement) est posée à
-l'**enqueue** (`AppServer::enqueue`) via un `Arc<AtomicBool>` consultable par
-`ctx.cancelled()`.
-- **Fichiers** : `server.rs` (`Job`, `dispatcher`, `enqueue`), `context.rs` (`cancelled`)
-- **Accepté quand** : handler lent + re-clic → le job 1 s'arrête au pas suivant
-  (alerte `Warn`) et le job 2 part (testé : 4 fragments coupés, puis 10
-  complets ; alertes `warn` puis `success`).
+### 1.2 Event Chaining `.then()` / `.success()` / `.failure()` · ✅
+Each primary handler supports an execution chain: `then` (always),
+`success` (on success), `failure` (on error — a successful `failure` handler
+recovers state and triggers subsequent `success` links).
+- **Files**: `app.rs` (`Sibling`, `RunCond`, `handler.chain`, `run_handler`)
+- **Accepted when**: Chatbot in `examples/blocks.rs` — `on_submit(user_fn).then(bot_fn)`
+  renders streamed tokens after user submission.
 
-### 2.3 Streaming outputs (LLM, génération en continu) · ✅
-Composant `Output` streamable via **`ctx.append(id, fragment)`** : fragments
-**poussés uniquement** en temps réel (absents de la réponse finale → pas de
-doublon côté client). Le client (`output.apply`) concatène `patch.append`.
-- **Fichiers** : `context.rs` (`append`), `assets/app.js` (`apply`), `examples/greet.rs`
-- **Accepté quand** : démo « token par token » (10 fragments + sleep 350 ms)
-  affichée progressivement sans freeze — testé.
+### 1.3 Event Data Exposed to Context · ✅
+`ctx.event() -> Option<&WireEvent>` exposes target (`c`), action (`e`),
+data (`d`), and snapshot (`v`). Registered in `Context` by `server::run_event`.
+- **Files**: `context.rs` (`Context.event`, accessor), `server.rs` (wire clone)
+- **Accepted when**: Handler displays triggering metadata in `examples/blocks.rs`.
 
-### 2.4 Alerts / toasts utilisateur · ✅
-`ctx.alert(AlertLevel, msg)` envoie `{t:"alert", level, msg}` → toast stylé par
-niveau (`info`/`success`/`warn`/`error`). Les alertes ne sont jamais dans la
-réponse finale.
-- **Fichiers** : `context.rs` (`AlertLevel`, `alert`), `app.js` (toast coloré),
-  `styles.css` (.mg-toast-*)
-- **Accepté quand** : warn + success affichés distinctement (testé).
+### 1.4 `gr.skip()` / Universal Property Patching (`gr.update`) · ✅
+- `ctx.skip("id")` / `ctx.unskip`: subsequent writes to `id` are discarded.
+- `ctx.set_prop("id", "visible"|"label", v)` dynamically mutates component properties.
+- **Files**: `context.rs` (`skip`/`unskip`/`skipped`), `app.js`, `styles.css`.
 
-### 2.5 Progress bars · ✅
-Composant `Progress` + **`ctx.progress(id, f, label)`** : barre animée + label
-à droite, état « terminé » (vert) à 100 %.
-- **Fichiers** : `components.rs` (`Progress`), `context.rs`, `app.js`
-  (registre `progress`), `styles.css` (.mg-progress-*)
-- **Accepté quand** : tâche longue → barre 0→100 % + message d'étape (testé).
+### 1.5 Explicit Interactivity · ✅
+`.interactive(bool)` on input components: rendered as `disabled`, greyed out,
+yet remains included in the input snapshot.
+- **Files**: `components.rs`, `app.js` (disabled state), `styles.css` (.mg-disabled).
 
----
+### 1.6 Page Mount Event (`load`) · ✅
+`App::on_load(fn)`: triggered by the client upon WebSocket connection
+(`{t:'event', c:'', e:'load'}`), routed through the standard handler pipeline.
+- **Files**: `events.rs` (`EventName::Load`), `app.rs` (`on_load`), `app.js` (emit), `server.rs`.
 
-## Phase 3 — Média & Streaming Inputs · [P1]
+### 1.7 Multi-Trigger Handlers `gr.on` · ✅
+`App::on("click"|"change", [ids...], fn)` binds the same shared function
+(`Arc<HandlerFn>`) to multiple components; `ctx.event()` distinguishes the caller.
+- **Files**: `app.rs` (`App::on`, `HandlerFn = Arc<...>`).
 
-> **Livrée.** Choix assumés : les médias voyagent en **data URLs**
-> (`data:<mime>;base64,…`), pas en multipart — lecture par
-> `ctx.get::<String>/get_str`, analyse serveur via `media::inspect` (type,
-> taille, dimensions PNG/JPEG/GIF) et `media::decode`. Le **streaming live**
-> passe par un message WS dédié `{t:"stream", c, p:{mime, b64}}` ; le serveur
-> cumule des **statistiques** `StreamInfo { mime, bytes, chunks }` dé-sérialisables
-> par le handler (`ctx.get::<StreamInfo>`), et l'UI met à jour le total en temps
-> réel (patch `stream`). Dépendance ajoutée : `base64 = "0.22"`.
-> Vérifié : build + doc zéro warning, 11 scénarios WebSocket verts sur
-> `examples/media.rs` (stream cumulé, alertes, événements transports,
-> analyse d'image).
-
-### 3.1 Composants média (upload/affichage) · ✅
-`Image`, `Audio`, `Video` : kinds `image`/`audio`/`video`, rôles `Input`
-(upload) / `Output` (lecteur/affichage) via `.input()`/`.output()`,
-`.interactive(bool)`, `.live(bool)`, `.value(data_url)`, `.label(...)`.
-Upload client : FileReader → data URL → événement `change`.
-- **Fichiers** : `components.rs` (3 kinds + docs), `app.js` (registres + upload
-  + drag & drop), `styles.css` (.mg-media-*), `server.rs` (rendu)
-- **Accepté quand** : une image uploadée est traitée côté serveur —
-  `media::inspect` renvoie type, taille et **dimensions** (PNG 1×1 testé :
-  `image · image/png · 1x1 · 70 octets`).
-
-### 3.2 Streaming Inputs (micro/caméra) · ✅
-`getUserMedia` + `MediaRecorder` → fragments (Blob) → `FileReader` → WS
-`{t:"stream", c, p:{mime, b64}}`. `server::handle_stream` met à jour les stats
-cumulées du composant, pousse un patch temps réel `{stream: stats}`, et enfile
-l'événement `"stream"` → `App::on_stream(id, fn)` lit le total via
-`ctx.get::<StreamInfo>`.
-- **Fichiers** : `media.rs` (`StreamInfo`, `decode`), `server.rs`
-  (`WireStream`, `handle_stream`), `app.js` (`MG.stream(id).send(blob)`,
-  `sendStream`), `examples/media.rs`
-- **Accepté quand** : 5 fragments envoyés → `StreamInfo {chunks:5}` lu par le
-  handler, alerte à `chunks % 5 == 0`, `stats_out` mise à jour en direct
-  (testé).
-
-### 3.3 Événements propres à un composant · ✅
-`EventName::Play|Pause|Stop|Stream` (+ parse), `.on_play/.on_pause/.on_stop/
-.on_stream` (et `.on("play"|"pause"|"stop"|"stream", …)`), bannière serveur,
-boutons play/pause/stop côté client émettant `{t:"event", e:"play"|…}`.
-- **Fichiers** : `events.rs`, `app.rs` (builders + routage), `server.rs`
-  (armes de bannière), `app.js` (playerButtons)
-- **Accepté quand** : play/pause/stop déclenchés par WS → alertes serveur
-  (testé : `lecture démarrée (play)`, `flux arrêté (stop)`).
+### 1.8 Advanced Layouts: Tabs and Accordions · ✅
+- `Tabs::new(id).tab(label, builder)`: Client-side interactive tab panels.
+- `Accordion::new(id).section(label, builder)`: Native `<details>/<summary>` collapsible sections.
+- **Files**: `components.rs` (`Tabs`, `Accordion`), `server.rs`, `app.js`, `styles.css`.
 
 ---
 
-## Phase 4 — Dix widgets paramétrables (à l'image de Gradio) · [P0]
+## Phase 2 — Real-Time Engine (Queuing, Streaming, Alerts, Progress) · [P0]
 
-> **Livrée.** Choix assumés : **Plot** = SVG dessiné à la main en JS vanilla
-> (zéro dépendance — `drawPlot` : axes, grille, légende, barres, polyline,
-> scatter). **Code** = tokenizer maison (`LANGS` : rust/python/javascript/
-> json/markdown) rendu dans un `<pre>` surmonté d'un `<textarea>` transparent
-> (texte invisible, `caret-color` visible, scroll synchronisé). **Explorer** =
-> vrai navigateur de fichiers **serveur** via `GET /api/explore` (racine
-> bornée par `canonicalize` + `strip_prefix`, filtre de fichiers par **globe**
-> sans regex — `glob_match` itératif sur `Vec<char>`). Tous les widgets sont
-> entièrement configurables par builder et leurs valeurs se lisent
-> classiquement via `ctx.get` (bool, String, Vec, Value/tableau…).
-> Vérifié : build + doc zéro warning, 16 scénarios verts (WS + HTTP) sur
-> `examples/forms.rs` — dont le garde-fou anti-sortie-de-racine de
-> `/api/explore` (`path=../../..` → `error`).
+> **Delivered.** Handlers run on `spawn_blocking` within a serialized queue,
+> preventing thread pool exhaustion while keeping handler code ergonomic and synchronous.
+> Cancellation is handled at enqueue time via `Arc<AtomicBool>` and `ctx.cancelled()`.
+> Full real-time streaming, deduplication, alert toasts, and progress bar updates tested.
 
-### 4.1 Composants paramétrables · ✅
-`Checkbox` (bool), `Dropdown` (`choices`/`choices_str`, `multiple`,
-`allow_custom`), `DatePicker` (`min`/`max`), `TimePicker`, `Dataframe`
-(`headers`, `data`, éditable en place : cellules + ajout/suppression de
-lignes), `Plot` (`line`/`bar`/`scatter`, titre/axes/légende/couleurs),
-`Gallery` (`columns`, upload multiple + drag-drop, clic → index), `SortableList`
-(drag & drop HTML5 natif, `change` = nouvel ordre), `Code`
-(`language`/`theme`/numéros de ligne, `input`=éditeur / `output`=lecture seule),
-`Explorer` (racine + `pattern` globe).
-- **Fichiers** : `components.rs` (10 types + kinds + docs), `app.js`
-  (registres + moteurs `highlight`/`drawPlot`), `styles.css` (10 blocs
-  `.mg-*`), `server.rs` (rendu), `lib.rs` (ré-exports)
-- **Accepté quand** : `examples/forms.rs` — submit avec toutes les valeurs
-  lues (`ctx.get`), re-tri de la liste, édition du code, clic galerie, chemin
-  explorateur (testés).
+### 2.1 Async Handlers & Push Dispatching · ✅
+`ctx.set`, `ctx.append`, `ctx.progress`, and `ctx.alert` push immediate updates
+over the WebSocket broadcast channel while long tasks run.
+- **Files**: `server.rs` (`dispatcher`, `run_event`), `context.rs` (`push` sender).
 
-### 4.2 Explorer de fichiers serveur (`/api/explore`) · ✅
-`GET /api/explore?root=&path=&pattern=` → `{t:"ok", root, path, dirs, files}`.
-`std::fs::canonicalize(base.join(rel))` + `starts_with(&base)` borne la racine
-(une tentative de sortie → `{t:"error", msg}`) ; `pattern` (globe `*`/`?`)
-filtre les fichiers ; entrées triées, dossiers en premier. Le front affiche
-une liste + breadcrumbs et émet `change` avec le chemin relatif cliqué.
-- **Fichiers** : `server.rs` (`ExploreQuery`, `glob_match`, `explore`),
-  `app.js` (registre `explorer`)
-- **Accepté quand** : `root=.`, `path=crates/grio/src`, `pattern=*.rs` →
-  `lib.rs` présent et aucun fichier non-`.rs` ; `path=../../..` → erreur
-  (testés).
+### 2.2 Queuing & Cancellation · ✅
+Serialized `tokio::mpsc` queue ensures stable FIFO ordering without race conditions.
+Re-triggering the same component event marks prior tasks as cancelled.
+- **Files**: `server.rs` (`Job`, `dispatcher`, `enqueue`), `context.rs` (`cancelled`).
 
-### 4.3 Édition de code colorisée + dessin SVG maison · ✅
-`highlight(src, lang)` tokenise et émet des `<span class="tok-k|s|n|c">`
-(5 langages) ; `drawPlot(spec, p)` génère le SVG (grille, axes gradués —
-`fmtV` en k/m/M —, légende, barres `rect`, `polyline`, `circle` scatter).
-Les `set`/`set_prop` serveur redessinent (`apply`).
-- **Fichiers** : `assets/app.js` (`LANGS`, `highlight`, `drawPlot`, `fmtV`),
-  `styles.css` (.tok-*, .mg-plot-*)
-- **Accepté quand** : clic « Barres »/« Lignes » → `ctx.set("chart", …)`
-  pousse un spec rendu en SVG (séries `{name, data}` vérifiées côté test).
+### 2.3 Streaming Outputs (LLM Token-by-Token) · ✅
+Component streaming via **`ctx.append(id, chunk)`**: chunks are pushed exclusively
+in real-time and deduplicated from the final response payload.
+- **Files**: `context.rs` (`append`), `assets/app.js` (`apply`), `examples/greet.rs`.
 
-### 4.4 Mise en page modulaire (`Layout` / `WithLayout`) · ✅
-Un **réglage commun à tout composant** : `width`, `height`, `scale`
-(`flex-grow`), `min_width` (px). Une seule mécanique — champ `layout` fusionné
-dans `props` par `server::merge_props` au rendu **et** dans `/api/schema`.
-Deux entrées : l'enveloppe générique `WithLayout::new(comp)` (brique **ou**
-conteneur, sans toucher au type) et les builders de groupe
-(`RowBuilder.width/height/scale/min_width` → `App::row/column/panel`). Le
-front applique le tout en un point (`app.js` `applyLayout` dans `mount`).
-- **Fichiers** : `components.rs` (`Layout`, `WithLayout`, `Component::layout`),
-  `app.rs` (`RowBuilder` + wrap conditionnel), `server.rs` (`merge_props`),
-  `app.js` (`applyLayout`), `examples/forms.rs` (démo)
-- **Accepté quand** : `WithLayout::new(Code…).height(220)`,
-  `WithLayout::new(Button…).scale(1)`, `r.min_width(360)`, `p.min_width(400)`,
-  dataframe `.width(520)` — toutes les clés `layout` présentes dans le HTML
-  servi, et **16 scénarios WS verts** (les enveloppes n'altèrent ni ids, ni
-  events, ni lecture `ctx.get`).
+### 2.4 User Alerts / Toasts · ✅
+`ctx.alert(AlertLevel, msg)` dispatches `{t:"alert", level, msg}` rendered as styled toasts
+(`info`, `success`, `warn`, `error`).
+- **Files**: `context.rs` (`AlertLevel`, `alert`), `app.js`, `styles.css` (.mg-toast-*).
 
-### 4.5 Éditeur d'image (`ImageEditor` → masque d'inpainting) · ✅
-Retouche **côté client** sur canvas : pinceau + gomme (étroits degrés),
-formes (rectangle/ligne/flèche), rognage (crop), rotation 90°, filtres
-(gris/inverse/clair/sombre/flou), annuler/rétablir (pile 20), zoom/pan, et
-**1–4 calques RGBA** (`.layers(n)`, visibilité + opacité par calque).
-La valeur de `change` est `{image, layers[], mask}` — `mask` = calques rendus
-**blanc sur noir**, donc les zones à repeindre : sortie idéale pour de
-l'**inpainting** côté serveur. Fond par défaut en dégradé si pas d'image.
-- **Fichiers** : `components.rs` (`ImageEditor`), `app.js` (registre
-  `imageeditor` : outils, pointeur, calques, historique, masque),
-  `styles.css` (.mg-ie-*), `lib.rs`, `examples/forms.rs` (panneau retouche +
-  `on_change("photo")` qui lit `{layers, mask}`)
-- **Accepté quand** : widget rendu (`data-kind="imageeditor"`, `layers:2`) ;
-  un `change photo` synthétique avec `{image, layers:[2], mask}` → alerte
-  serveur « retouche : 2 calque(s), masque … — prêt pour de l'inpainting »
-  (testé) + 16 scénarios WS toujours verts.
+### 2.5 Dynamic Progress Bars · ✅
+`Progress` component + **`ctx.progress(id, pct, label)`**: animated progress indicator
+with stage message and completion highlight at 100%.
+- **Files**: `components.rs` (`Progress`), `context.rs`, `app.js`, `styles.css`.
+
+---
+
+## Phase 3 — Media & Streaming Inputs · [P1]
+
+> **Delivered.** Media transport uses Base64 **Data URLs** for zero-dependency portability.
+> Server-side analysis via `media::inspect` extracts MIME types, byte sizes, and image dimensions.
+> Live audio/video streaming utilizes `{t:"stream", c, p:{mime, b64}}` accumulating `StreamInfo`.
+
+### 3.1 Media Components (Upload / Display) · ✅
+`Image`, `Audio`, `Video`: support `.input()` (upload) and `.output()` (player/viewer),
+with drag & drop and reactive `change` events.
+- **Files**: `components.rs`, `app.js`, `styles.css`, `server.rs`.
+
+### 3.2 Streaming Inputs (Microphone & Camera) · ✅
+`getUserMedia` + `MediaRecorder` pipeline streams chunks directly through WebSocket to `App::on_stream`.
+- **Files**: `media.rs` (`StreamInfo`, `decode`), `server.rs` (`handle_stream`), `app.js`.
+
+### 3.3 Component Transport Lifecycle Events · ✅
+`EventName::Play|Pause|Stop|Stream` wired to media player controls and server lifecycle hooks.
+- **Files**: `events.rs`, `app.rs`, `server.rs`, `app.js`.
+
+---
+
+## Phase 4 — Core Parametric Widgets · [P0]
+
+> **Delivered.** Ten rich interactive widgets written in Vanilla JS and CSS3 without npm dependencies.
+> Includes built-in SVG vector charting (`Plot`), syntax-highlighted code editor (`Code`),
+> inpainting canvas (`ImageEditor`), and sandboxed server-side file explorer (`Explorer`).
+
+### 4.1 Configurable Components · ✅
+`Checkbox`, `Dropdown` (single, multiple, searchable), `DatePicker`, `TimePicker`,
+`Dataframe` (editable spreadsheet), `Plot` (SVG charts), `Gallery`, `SortableList` (HTML5 DnD),
+`Code` (syntax highlighted), and `Explorer`.
+- **Files**: `components.rs`, `app.js`, `styles.css`, `server.rs`, `lib.rs`.
+
+### 4.2 Sandboxed Server File Explorer (`/api/explore`) · ✅
+Secure directory browsing bounded by root canonicalization with glob pattern filtering.
+- **Files**: `server.rs` (`explore`), `app.js`.
+
+### 4.3 Client-Side Inpainting Image Editor (`ImageEditor`) · ✅
+Canvas-based retouching: brush, eraser, shapes, crop, rotation, filters, undo/redo,
+and 1–4 RGBA annotation layers generating mask outputs for AI inpainting.
+- **Files**: `components.rs`, `app.js`, `styles.css`.
+
+### 4.4 Modular Layout System (`Layout` / `WithLayout`) · ✅
+Universal responsive layout styling: `width`, `height`, `scale` (`flex-grow`), and `min_width`.
+- **Files**: `components.rs` (`WithLayout`), `app.rs` (`RowBuilder`), `app.js`.
 
 ---
 
@@ -302,59 +168,26 @@ l'**inpainting** côté serveur. Fond par défaut en dégradé si pas d'image.
 - [x] **CLI `grio`** : outil en ligne de commande et générateur de projets `crates/grio-cli` (`grio new <nom> --template <chatbot|vision|greet>`).
 - [x] **Tests d'intégration** : suite de tests automatisés `crates/grio/tests/api_predict.rs` validant le pipeline complet, l'OpenAPI, la doc et l'authentification.
 
+## Phase 5 — Production & Developer Tooling · ✅
+
+- [x] **Isolated Sessions**: Independent state and event streams per client session (`sess_id`).
+- [x] **Full OpenAPI 3.0.3**: Auto-generated specification on `GET /api/openapi.json` + Swagger UI on `GET /docs`.
+- [x] **Authentication**: API key protection via `App::api_key(...)` (`X-API-Key` or `Bearer <token>`).
+- [x] **CORS & Network Config**: `.cors(bool)`, `.docs(bool)`, `.isolate_sessions(bool)`.
+- [x] **`grio` Developer CLI**: Project generator in `crates/grio-cli` (`grio new <name> --template <chatbot|vision|greet>`).
+- [x] **Integration Test Suite**: Automated end-to-end testing in `crates/grio/tests/api_predict.rs`.
+
 ---
 
-## Phase 6 — Écosystème IA & Test de Modèles · [P0]
+## Phase 6 — AI Ecosystem, Multimodal Studio & Observability · [P0]
 
-> **En cours.** Fournir un outil clé en main, ultra-rapide et performant pour
-> prototyper et tester des modèles en Rust (LLMs, vision, embeddings, audio).
-
-### 6.1 Grille responsive & Conteneurs imbriqués (`Grid`) · ✅
-- `Grid::new(id).columns(n).gap(g).gap_x(gx).gap_y(gy)` : CSS grid responsive
-  native (auto 1 col sur mobile).
-- `RowBuilder` fluide : `b.row(...)`, `b.column(...)`, `b.grid(...)`, `b.panel(...)`.
-- Alignements fins `align` / `justify` / `wrap` sur `Row` & `Column`.
-- Moteur de graphiques SVG `drawPlot` corrigé pour le mode barres.
-- **Fichiers** : `components.rs` (`Grid`, `Row`, `Column`), `app.rs` (`App::grid`, `RowBuilder`),
-  `server.rs`, `app.js`, `styles.css`, `examples/grid.rs`.
-
-### 6.2 Composant natif d'interaction LLM : `Chatbot` · ✅
-- Rendu d'historique de conversation : messages utilisateur et bot (`user`/`assistant`).
-- Support natif du streaming de tokens (mise à jour incrémentale fluide de la dernière bulle via `ctx.append`).
-- Formatage Markdown enrichi + blocs de code intégrés dans les bulles.
-- **Fichiers** : `components.rs` (`Chatbot`, `ChatMessage`), `app.js` (`register('chatbot', ...)`),
-  `styles.css` (.mg-chatbot-*, .mg-chat-*), `lib.rs`, `examples/chatbot.rs`.
-
-### 6.3 Documentation Complète & Référence des Composants en Anglais · ✅
-- Rédaction d'un guide exhaustif des composants en anglais ([COMPONENTS.md](COMPONENTS.md)).
-- Pour chaque composant : description, capture/concept, signature du builder Rust, format des données I/O, exemple minimaliste prêt à copier-coller.
-- Référencé en tête de [README.md](README.md) pour les nouveaux utilisateurs.
-- **Fichiers** : `COMPONENTS.md`, `README.md`, `ROADMAP.md`.
-
-### 6.4 Système de Thèmes & Dark Mode Natif · ✅
-- Mode sombre / clair / auto avec bascule rapide (`Theme::dark()`, `Theme::light()`, `Theme::system()`).
-- Personnalisation fluide de palette (couleur d'accentuation `primary`, arrondis `radius`, police `font`) via `App::theme`.
-- Bouton interactif toggle Dark/Light dans l'en-tête client avec persistance locale (`localStorage`).
-- **Fichiers** : `app.rs`, `server.rs`, `styles.css`, `app.js`.
-
-### 6.5 Système d'Onglets Fluide (`Tabs`) & Métriques IA (`Metric`) · ✅
-- `App::tabs` et `RowBuilder::tabs` avec panneaux et barre d'onglets réactive.
-- `Metric::new("id").label("Throughput").value("54.2").unit("tok/s").delta("+14.8%")` pour benchmarks et observabilité IA.
-- Exemple complet : `examples/theme_and_tabs.rs`.
-- **Fichiers** : `components.rs` (`Metric`, `Tabs`, `SectionBuilder`), `app.rs`, `lib.rs`, `server.rs`, `styles.css`, `app.js`.
-
-### 6.6 Multimodal AI Studio, Live Telemetry & Benchmarks (`examples/prompt_to_image.rs`) · ✅
-- **Autoregressive LLM**: Real quantized tensor matrix passes in GPU memory via Candle (Qwen 2.5 7B GGUF) with word-by-word token streaming.
-- **Image Generation Pipeline**: Multistep diffusion checkpoint inference with real-time latent streaming.
-- **Observability & Analytics**: Live telemetry dataframe (`Dataframe`), throughput speed graphs (`Plot` line chart), VRAM allocation charts (`Plot` bar chart), and dynamic KPI cards (`Metric`).
-- **Config-Driven**: `models.toml` configuration decoupling paths for portability.
-- **Files**: `examples/prompt_to_image.rs`, `models.toml`.
-
-### 6.7 Multilingual Engine (i18n) & Interactive API Code Generator · ✅
-- **i18n System**: Dynamic language switcher in Settings modal (🇬🇧 English, 🇫🇷 Français, 🇪🇸 Español, 🇩🇪 Deutsch) translating all component defaults, modals, and alerts without page reloads.
-- **Interactive `⚡ Use via API` Modal**: Auto-generates ready-to-run client code for Python (`requests`), JavaScript (`fetch`), cURL, and Model Context Protocol (MCP Tool) for LLM agents.
-- **Brand Identity**: Adopted Rust gear logo (`⚙️ grio`).
-- **Files**: `server.rs`, `app.js`, `styles.css`.
+- [x] **Responsive Grid (`Grid`)**: Native CSS grid container with responsive column wrapping.
+- [x] **Conversational Chatbot (`Chatbot`)**: Markdown formatting, code block highlighting, token streaming.
+- [x] **English Reference Guide**: Complete widget documentation in [COMPONENTS.md](COMPONENTS.md).
+- [x] **Integrated Theming Engine**: Light, dark, and auto modes with custom color accents (`Theme`).
+- [x] **Observability Cards (`Metric`)**: Real-time KPI indicators with delta values and semantic colors.
+- [x] **Multimodal AI Studio (`prompt_to_image`)**: Quantized Candle LLM (Qwen 2.5 7B GGUF) + SDXL diffusion studio.
+- [x] **Multilingual i18n & API Code Modal**: On-the-fly language switching (🇬🇧, 🇫🇷, 🇪🇸, 🇩🇪) and client snippet generator (Python, JS, cURL, MCP Tool).
 
 ---
 
@@ -388,9 +221,57 @@ l'**inpainting** côté serveur. Fond par défaut en dégradé si pas d'image.
 
 ---
 
+## Phase 8 — Advanced Controls & AI Modalities · 🚀
+
+> **Delivered.** Specialized components expanding grio's multimodal AI capabilities,
+> maintaining zero npm dependencies with pure Rust, modern CSS3, and Vanilla ES6.
+
+### 8.1 Batch 1: Controls & Selection (`Radio`, `SliderRange`, `ColorPicker`) · ✅
+- `Radio`: Mutually exclusive selector supporting segmented pill buttons or classic radio styles.
+- `SliderRange`: Dual-thumb slider for selecting bounded intervals `[min, max]`.
+- `ColorPicker`: Native color palette selector with hex code entry and clickable swatches.
+- **Files**: `components.rs`, `lib.rs`, `app.js`, `styles.css`, `COMPONENTS.md`, `tests/api_predict.rs`, `examples/forms.rs`.
+- **Accepted when**: `cargo check --all-targets` & `cargo test` pass with zero warnings; `forms.rs` displays the "Phase 8 (Batch 1)" panel with full API tests and snapshots.
+
+### 8.2 Built-in Showcase & CLI Runner (`App::showcase()`, `grio showcase`) · ✅
+- `App::showcase()`: Pre-configured 5-tab application featuring all 30+ components with reactive event handlers.
+- `grio showcase [--port <7860>]`: Standalone CLI command to launch the full gallery in 1 line.
+- Minimal example in `examples/showcase.rs`.
+- **Files**: `showcase.rs`, `lib.rs`, `grio-cli/src/main.rs`, `examples/showcase.rs`, `tests/api_predict.rs`.
+- **Accepted when**: `test_showcase_boot_and_components` boots the showcase and validates the DOM for all widgets, the OpenAPI documentation, and `/api/predict`.
+
+### 8.3 Batch 2: AI Vision & Media Annotation (`AnnotatedImage`, `ImageComparison`, `AudioRecorder`) · ✅
+- `AnnotatedImage`: Normalized bounding box overlay (YOLO/SAM labels, confidence scores, accent colors).
+- `ImageComparison`: Interactive before/after sliding curtain comparison (mouse and touch draggable).
+- `AudioRecorder`: Direct microphone recorder with pulsing REC indicator, timer, and ASR/Whisper export.
+- **Files**: `components.rs`, `lib.rs`, `app.js`, `styles.css`, `showcase.rs`, `COMPONENTS.md`, `tests/api_predict.rs`.
+- **Accepted when**: `cargo check --all-targets` & `cargo test` pass; `test_lot2_vision_and_audio_integration` validates DOM rendering and `/api/predict`.
+
+### 8.4 Batch 3: Progress Visual Variants (`Progress` : `bar`, `circle`, `pie`) · ✅
+- Extended `Progress` with 3 visual variants: `.bar()` (default), `.circle()` (SVG arc ring), and `.pie()` (conic-gradient sector).
+- Full real-time support via `ctx.progress(id, pct, label)`.
+- **Files**: `components.rs`, `app.js`, `styles.css`, `showcase.rs`, `COMPONENTS.md`, `tests/api_predict.rs`.
+- **Accepted when**: `test_progress_variants_bar_circle_pie` validates HTML output for all 3 variants and API responsiveness.
+
+### 8.5 Batch 4: Specialized AI Evaluation (`HighlightedText`, `CodeDiff`, `Model3D`) · ✅
+- `HighlightedText`: NLP/NER entity span visualizer with category chips and automatic color legend.
+- `CodeDiff`: AI code refactoring comparative diff viewer with line numbers and `+`/`-` line additions/deletions.
+- `Model3D`: Lightweight WebGL 3D mesh viewer supporting Wavefront OBJ files with orbit rotation and mouse zoom.
+- **Files**: `components.rs`, `lib.rs`, `app.js`, `styles.css`, `showcase.rs`, `COMPONENTS.md`, `tests/api_predict.rs`.
+- **Accepted when**: `cargo check --all-targets` & `cargo test` pass with 100% success; `test_lot4_specialized_components_integration` validates the DOM and `/api/predict`.
+
+### 8.6 Batch 5: Robust `Html` Component & `window.grio` JavaScript Bridge · ✅
+- `Html`: Embeds custom HTML, CSS, and scoped JavaScript without memory leaks or event drops.
+- **Automatic Event Delegation**: Inner elements bearing `data-grio-action`, `data-grio-change`, or `data-grio-input` automatically dispatch directly to the server.
+- **`window.grio` API Bridge**: Documented client object (`emit`, `on`, `get`, `snapshot`, `toast`) enabling custom scripts to communicate seamlessly with Rust handlers.
+- **Files**: `app.js`, `components.rs`, `lib.rs`, `styles.css`, `showcase.rs`, `COMPONENTS.md`, `tests/api_predict.rs`.
+- **Accepted when**: `test_html_custom_component_robustness` validates delegation and the WebSocket event lifecycle.
+
+---
+
 ## Roadmap Conventions
 
 1. One task = one checked box + an entry in `README.md`.
 2. Every item lists affected files before starting.
 3. Criteria *Accepted when* serve as the acceptance tests.
-4. Always ensure `cargo check -p grio --all-targets` has zero errors and warnings.
+4. Always ensure `cargo check -p grio --all-targets` and `cargo test --all-targets` have zero errors and zero warnings.

@@ -34,13 +34,16 @@ pub mod context;
 pub mod events;
 pub mod media;
 pub mod server;
+pub mod showcase;
 
 pub use app::{App, Theme, ThemeMode};
 pub use components::{
-    Accordion, Audio, Button, ChatMessage, Chatbot, Checkbox, Code, Column, Component, Dataframe,
-    DatePicker, DownloadButton, Dropdown, Explorer, File, Gallery, Grid, Image, ImageEditor,
-    IntoBox, Json, Label, Layout, Markdown, Metric, Number, Output, Panel, Plot, Progress, Role,
-    Row, SectionBuilder, Slider, SortableList, Tabs, Text, TimePicker, Timer, Video, WithLayout,
+    Accordion, AnnotatedImage, Audio, AudioRecorder, BoundingBox, Button, ChatMessage, Chatbot,
+    Checkbox, Code, CodeDiff, ColorPicker, Column, Component, Dataframe, DatePicker, DownloadButton,
+    Dropdown, Explorer, File, Gallery, Grid, HighlightedText, Html, Image, ImageComparison,
+    ImageEditor, IntoBox, Json, Label, Layout, Markdown, Metric, Model3D, Number, Output,
+    Panel, Plot, Progress, Radio, Role, Row, SectionBuilder, Slider, SliderRange, SortableList,
+    Tabs, Text, TextSegment, TimePicker, Timer, Video, WithLayout,
 };
 pub use context::{AlertLevel, Context};
 pub use events::EventName;

@@ -71,6 +71,10 @@ pub struct Layout {
     pub width: Option<u32>,
     /// Hauteur en pixels (CSS `height`).
     pub height: Option<u32>,
+    /// Largeur maximale en pixels (CSS `max-width`).
+    pub max_width: Option<u32>,
+    /// Hauteur maximale en pixels (CSS `max-height`).
+    pub max_height: Option<u32>,
     /// Proportion relative dans la ligne (CSS `flex-grow`).
     pub scale: Option<u32>,
     /// Largeur minimale en pixels (CSS `min-width`).
@@ -86,6 +90,12 @@ impl Layout {
         }
         if let Some(h) = self.height {
             o.insert("height".into(), json!(h));
+        }
+        if let Some(mw) = self.max_width {
+            o.insert("max_width".into(), json!(mw));
+        }
+        if let Some(mh) = self.max_height {
+            o.insert("max_height".into(), json!(mh));
         }
         if let Some(s) = self.scale {
             o.insert("scale".into(), json!(s));
@@ -121,6 +131,10 @@ impl<C: Component> WithLayout<C> {
     pub fn width(mut self, w: u32) -> Self { self.layout.width = Some(w); self }
     /// Hauteur en pixels.
     pub fn height(mut self, h: u32) -> Self { self.layout.height = Some(h); self }
+    /// Largeur maximale en pixels.
+    pub fn max_width(mut self, mw: u32) -> Self { self.layout.max_width = Some(mw); self }
+    /// Hauteur maximale en pixels.
+    pub fn max_height(mut self, mh: u32) -> Self { self.layout.max_height = Some(mh); self }
     /// Proportion relative dans la ligne (comme `scale` de Gradio).
     pub fn scale(mut self, s: u32) -> Self { self.layout.scale = Some(s); self }
     /// Largeur minimale en pixels.
@@ -331,7 +345,12 @@ impl Component for Button {
     }
 }
 
-/// Barre de progression (cible de `ctx.progress`).
+/// Barre ou jauge de progression (cible de `ctx.progress`).
+///
+/// Trois variantes d'affichage sont disponibles :
+/// * `"bar"` (défaut) : barre horizontale avec gradient de progression.
+/// * `"circle"` : anneau vectoriel circulaire SVG avec pourcentage centré.
+/// * `"pie"` : camembert plein sectoriel avec étiquette.
 ///
 /// Le composant ne stocke pas de valeur déclarative : il est entièrement
 /// piloté par les mises à jour envoyées par un handler (`ctx.progress`).
@@ -339,22 +358,43 @@ impl Component for Button {
 pub struct Progress {
     id: String,
     label: String,
+    variant: String,
+    size: Option<usize>,
 }
 
 impl Progress {
-    /// Crée une barre de progression, avec son identifiant.
+    /// Crée un composant de progression, avec son identifiant. Variante `"bar"` par défaut.
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), label: String::new() }
+        Self {
+            id: id.into(),
+            label: String::new(),
+            variant: "bar".to_string(),
+            size: None,
+        }
     }
-    /// Étiquette affichée au-dessus de la barre.
+    /// Étiquette affichée au-dessus ou à côté de la progression.
     pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Définit la variante visuelle (`"bar"`, `"circle"`, `"pie"`).
+    pub fn variant(mut self, v: impl Into<String>) -> Self { self.variant = v.into(); self }
+    /// Configure la variante barre horizontale (défaut).
+    pub fn bar(mut self) -> Self { self.variant = "bar".to_string(); self }
+    /// Configure la variante anneau circulaire SVG.
+    pub fn circle(mut self) -> Self { self.variant = "circle".to_string(); self }
+    /// Configure la variante camembert sectoriel (pie chart).
+    pub fn pie(mut self) -> Self { self.variant = "pie".to_string(); self }
+    /// Dimension optionnelle en pixels (ex: diamètre du cercle ou camembert).
+    pub fn size(mut self, s: usize) -> Self { self.size = Some(s); self }
 }
 
 impl Component for Progress {
     fn id(&self) -> &str { &self.id }
     fn kind(&self) -> &'static str { "progress" }
     fn props(&self) -> Value {
-        json!({ "label": self.label })
+        json!({
+            "label": self.label,
+            "variant": self.variant,
+            "size": self.size
+        })
     }
 }
 
@@ -1835,5 +1875,652 @@ impl Component for DownloadButton {
     fn role(&self) -> Role { Role::Output }
     fn props(&self) -> Value {
         json!({ "label": self.label, "filename": self.filename, "value": self.value })
+    }
+}
+
+/// **Radio** component (`gr.Radio` equivalent): mutually exclusive selection
+/// from a predefined list of options. Can be displayed either as traditional
+/// radio buttons or modern pill segments (`style("pills")` / `style("radio")`).
+///
+/// Returns the selected choice as a `String` when read via `ctx.get::<String>("id")`.
+#[derive(Clone, Debug)]
+pub struct Radio {
+    id: String,
+    label: String,
+    choices: Vec<String>,
+    value: String,
+    direction: String,
+    style: String,
+    interactive: bool,
+}
+
+impl Radio {
+    /// Creates a radio group component with its identifier. Input by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: String::new(),
+            choices: Vec::new(),
+            value: String::new(),
+            direction: "horizontal".into(),
+            style: "pills".into(),
+            interactive: true,
+        }
+    }
+    /// Label displayed above the options.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Sets the list of selectable options from string slices.
+    pub fn choices(mut self, c: &[&str]) -> Self {
+        self.choices = c.iter().map(|s| s.to_string()).collect();
+        if self.value.is_empty() && !self.choices.is_empty() {
+            self.value = self.choices[0].clone();
+        }
+        self
+    }
+    /// Sets the list of selectable options from owned `String`s.
+    pub fn choices_str(mut self, c: Vec<String>) -> Self {
+        if self.value.is_empty() && !c.is_empty() {
+            self.value = c[0].clone();
+        }
+        self.choices = c;
+        self
+    }
+    /// Initial selected value.
+    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    /// Layout direction (`"horizontal"` or `"vertical"`). Default is `"horizontal"`.
+    pub fn direction(mut self, d: impl Into<String>) -> Self { self.direction = d.into(); self }
+    /// Visual presentation (`"pills"` or `"radio"`). Default is `"pills"`.
+    pub fn style(mut self, s: impl Into<String>) -> Self { self.style = s.into(); self }
+    /// Enables or disables user interaction.
+    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+}
+
+impl Component for Radio {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "radio" }
+    fn role(&self) -> Role { Role::Input }
+    fn props(&self) -> Value {
+        json!({
+            "label": self.label,
+            "choices": self.choices,
+            "value": self.value,
+            "direction": self.direction,
+            "style": self.style,
+            "interactive": self.interactive
+        })
+    }
+}
+
+/// **SliderRange** component (`gr.RangeSlider` / `gr.Slider(range=True)` equivalent):
+/// dual-thumb slider allowing selection of an interval `[min_val, max_val]`.
+///
+/// Returns the current interval as a pair of floats `(f64, f64)` or `[f64; 2]`
+/// when read via `ctx.get::<(f64, f64)>("id")` or `ctx.get::<serde_json::Value>("id")`.
+#[derive(Clone, Debug)]
+pub struct SliderRange {
+    id: String,
+    label: String,
+    min: f64,
+    max: f64,
+    step: f64,
+    value: (f64, f64),
+    unit: String,
+    interactive: bool,
+}
+
+impl SliderRange {
+    /// Creates a range slider component with default range `[0.0, 1.0]`. Input by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: String::new(),
+            min: 0.0,
+            max: 1.0,
+            step: 0.05,
+            value: (0.2, 0.8),
+            unit: String::new(),
+            interactive: true,
+        }
+    }
+    /// Label displayed above the range slider.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Lower bound.
+    pub fn min(mut self, m: f64) -> Self { self.min = m; self }
+    /// Upper bound.
+    pub fn max(mut self, m: f64) -> Self { self.max = m; self }
+    /// Step resolution.
+    pub fn step(mut self, s: f64) -> Self { self.step = s; self }
+    /// Initial range `(low, high)`.
+    pub fn value(mut self, low: f64, high: f64) -> Self { self.value = (low, high); self }
+    /// Optional unit symbol displayed alongside values (e.g. `"%"`, `"px"`, `"s"`).
+    pub fn unit(mut self, u: impl Into<String>) -> Self { self.unit = u.into(); self }
+    /// Enables or disables user interaction.
+    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+}
+
+impl Component for SliderRange {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "sliderrange" }
+    fn role(&self) -> Role { Role::Input }
+    fn props(&self) -> Value {
+        json!({
+            "label": self.label,
+            "min": self.min,
+            "max": self.max,
+            "step": self.step,
+            "value": [self.value.0, self.value.1],
+            "unit": self.unit,
+            "interactive": self.interactive
+        })
+    }
+}
+
+/// **ColorPicker** component (`gr.ColorPicker` equivalent): interactive color
+/// selector with native color input, hex display, and clickable quick presets.
+///
+/// Returns the chosen color code as a `String` (e.g. `"#6366f1"`) via `ctx.get::<String>("id")`.
+#[derive(Clone, Debug)]
+pub struct ColorPicker {
+    id: String,
+    label: String,
+    value: String,
+    presets: Vec<String>,
+    interactive: bool,
+}
+
+impl ColorPicker {
+    /// Creates a color picker component with default color `"#6366f1"`. Input by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: "#6366f1".into(),
+            presets: vec![
+                "#6366f1".into(),
+                "#8b5cf6".into(),
+                "#ec4899".into(),
+                "#ef4444".into(),
+                "#f59e0b".into(),
+                "#10b981".into(),
+                "#06b6d4".into(),
+                "#1e293b".into(),
+                "#ffffff".into(),
+            ],
+            interactive: true,
+        }
+    }
+    /// Label displayed above the color picker.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Initial hex color code.
+    pub fn value(mut self, hex: impl Into<String>) -> Self { self.value = hex.into(); self }
+    /// Quick preset colors from string slices.
+    pub fn presets(mut self, p: &[&str]) -> Self {
+        self.presets = p.iter().map(|s| s.to_string()).collect();
+        self
+    }
+    /// Quick preset colors from owned `String`s.
+    pub fn presets_str(mut self, p: Vec<String>) -> Self { self.presets = p; self }
+    /// Enables or disables user interaction.
+    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+}
+
+impl Component for ColorPicker {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "colorpicker" }
+    fn role(&self) -> Role { Role::Input }
+    fn props(&self) -> Value {
+        json!({
+            "label": self.label,
+            "value": self.value,
+            "presets": self.presets,
+            "interactive": self.interactive
+        })
+    }
+}
+
+/// **Bounding box** representation for [`AnnotatedImage`].
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct BoundingBox {
+    /// Normalized coordinates `[ymin, xmin, ymax, xmax]` in `0.0..=1.0`.
+    pub box_coords: [f64; 4],
+    /// Classification label (e.g. `"person"`, `"car"`, `"cat"`).
+    pub label: String,
+    /// Confidence score (e.g. `0.95`).
+    pub score: Option<f64>,
+    /// Hex stroke & tag color (e.g. `"#6366f1"`).
+    pub color: String,
+}
+
+/// **AnnotatedImage** component (`gr.AnnotatedImage` equivalent): displays a base
+/// image with vector bounding boxes, labels, and confidence tags.
+#[derive(Clone, Debug)]
+pub struct AnnotatedImage {
+    id: String,
+    label: String,
+    image: String,
+    boxes: Vec<BoundingBox>,
+    show_labels: bool,
+    show_scores: bool,
+}
+
+impl AnnotatedImage {
+    /// Creates an annotated image viewer with its identifier. Output by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: String::new(),
+            image: String::new(),
+            boxes: Vec::new(),
+            show_labels: true,
+            show_scores: true,
+        }
+    }
+    /// Label displayed above the image viewer.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Base background image URL or data URL.
+    pub fn image(mut self, img: impl Into<String>) -> Self { self.image = img.into(); self }
+    /// Adds a normalized bounding box `[ymin, xmin, ymax, xmax]` with label, score and color.
+    pub fn box_norm(
+        mut self,
+        ymin: f64,
+        xmin: f64,
+        ymax: f64,
+        xmax: f64,
+        label: impl Into<String>,
+        score: Option<f64>,
+        color: impl Into<String>,
+    ) -> Self {
+        self.boxes.push(BoundingBox {
+            box_coords: [ymin, xmin, ymax, xmax],
+            label: label.into(),
+            score,
+            color: color.into(),
+        });
+        self
+    }
+    /// Sets the full list of bounding boxes.
+    pub fn boxes(mut self, b: Vec<BoundingBox>) -> Self { self.boxes = b; self }
+    /// Sets full JSON data: `{ "image": "...", "boxes": [...] }`.
+    pub fn data<T: serde::Serialize>(mut self, d: &T) -> Self {
+        if let Ok(v) = serde_json::to_value(d) {
+            if let Some(img) = v.get("image").and_then(|x| x.as_str()) {
+                self.image = img.to_string();
+            }
+            if let Some(arr) = v.get("boxes").and_then(|x| x.as_array()) {
+                if let Ok(b) = serde_json::from_value::<Vec<BoundingBox>>(Value::Array(arr.clone())) {
+                    self.boxes = b;
+                }
+            }
+        }
+        self
+    }
+    /// Shows or hides class label badges on boxes.
+    pub fn show_labels(mut self, on: bool) -> Self { self.show_labels = on; self }
+    /// Shows or hides percentage confidence scores.
+    pub fn show_scores(mut self, on: bool) -> Self { self.show_scores = on; self }
+}
+
+impl Component for AnnotatedImage {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "annotatedimage" }
+    fn role(&self) -> Role { Role::Output }
+    fn props(&self) -> Value {
+        json!({
+            "label": self.label,
+            "image": self.image,
+            "boxes": self.boxes,
+            "show_labels": self.show_labels,
+            "show_scores": self.show_scores
+        })
+    }
+}
+
+/// **ImageComparison** component (`gr.ImageSlider` equivalent): interactive
+/// before-and-after image viewer with a draggable divider slider.
+#[derive(Clone, Debug)]
+pub struct ImageComparison {
+    id: String,
+    label: String,
+    before: String,
+    after: String,
+    before_label: String,
+    after_label: String,
+    position: f64,
+}
+
+impl ImageComparison {
+    /// Creates an image comparison viewer with its identifier. Output by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: String::new(),
+            before: String::new(),
+            after: String::new(),
+            before_label: "Before".into(),
+            after_label: "After".into(),
+            position: 50.0,
+        }
+    }
+    /// Label displayed above the comparison viewer.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Sets before image URL and optional badge label.
+    pub fn before(mut self, img: impl Into<String>, label: impl Into<String>) -> Self {
+        self.before = img.into();
+        self.before_label = label.into();
+        self
+    }
+    /// Sets after image URL and optional badge label.
+    pub fn after(mut self, img: impl Into<String>, label: impl Into<String>) -> Self {
+        self.after = img.into();
+        self.after_label = label.into();
+        self
+    }
+    /// Initial slider position percentage (e.g. `50.0`).
+    pub fn position(mut self, pos: f64) -> Self {
+        self.position = pos.clamp(0.0, 100.0);
+        self
+    }
+}
+
+impl Component for ImageComparison {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "imagecomparison" }
+    fn role(&self) -> Role { Role::Output }
+    fn props(&self) -> Value {
+        json!({
+            "label": self.label,
+            "before": self.before,
+            "after": self.after,
+            "before_label": self.before_label,
+            "after_label": self.after_label,
+            "position": self.position
+        })
+    }
+}
+
+/// **AudioRecorder** component: direct microphone recording with dedicated REC
+/// button, active recording animation, elapsed timer, and audio export.
+///
+/// Emits recorded audio data URL (`data:audio/webm;base64,...`) on `change`.
+#[derive(Clone, Debug)]
+pub struct AudioRecorder {
+    id: String,
+    label: String,
+    max_duration: f64,
+    interactive: bool,
+}
+
+impl AudioRecorder {
+    /// Creates an audio recorder component with default 60-second limit. Input by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: String::new(),
+            max_duration: 60.0,
+            interactive: true,
+        }
+    }
+    /// Label displayed above the recorder.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Maximum recording duration in seconds (default `60.0`).
+    pub fn max_duration(mut self, d: f64) -> Self { self.max_duration = d; self }
+    /// Enables or disables recording interaction.
+    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+}
+
+impl Component for AudioRecorder {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "audiorecorder" }
+    fn role(&self) -> Role { Role::Input }
+    fn props(&self) -> Value {
+        json!({
+            "label": self.label,
+            "max_duration": self.max_duration,
+            "interactive": self.interactive
+        })
+    }
+}
+
+/// **HighlightedText** segment: a piece of text with an optional category/entity label.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct TextSegment {
+    /// Text chunk content.
+    pub text: String,
+    /// Category or entity tag (e.g. `"PER"`, `"ORG"`, `"LOC"`, `"POSITIVE"`).
+    pub label: Option<String>,
+}
+
+/// **HighlightedText** component (`gr.HighlightedText` equivalent): renders text with
+/// highlighted entity spans, label badges, and an automatic color legend.
+#[derive(Clone, Debug)]
+pub struct HighlightedText {
+    id: String,
+    label: String,
+    segments: Vec<TextSegment>,
+    color_map: Vec<(String, String)>,
+    show_legend: bool,
+}
+
+impl HighlightedText {
+    /// Creates a highlighted text component with its identifier. Output by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: String::new(),
+            segments: Vec::new(),
+            color_map: Vec::new(),
+            show_legend: true,
+        }
+    }
+    /// Label displayed above the highlighted text.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Appends a segment with an optional category tag.
+    pub fn segment(mut self, text: impl Into<String>, label: Option<&str>) -> Self {
+        self.segments.push(TextSegment {
+            text: text.into(),
+            label: label.map(|s| s.to_string()),
+        });
+        self
+    }
+    /// Sets segments from a slice of `(text, Option<label>)`.
+    pub fn segments(mut self, segs: &[(&str, Option<&str>)]) -> Self {
+        self.segments = segs
+            .iter()
+            .map(|(t, l)| TextSegment {
+                text: t.to_string(),
+                label: l.map(|s| s.to_string()),
+            })
+            .collect();
+        self
+    }
+    /// Sets full JSON data: array of `[text, label]` or `Vec<TextSegment>`.
+    pub fn data<T: serde::Serialize>(mut self, d: &T) -> Self {
+        if let Ok(v) = serde_json::to_value(d) {
+            if let Some(arr) = v.as_array() {
+                self.segments = arr
+                    .iter()
+                    .filter_map(|item| {
+                        if let Some(pair) = item.as_array() {
+                            let text = pair.get(0).and_then(|x| x.as_str()).unwrap_or("").to_string();
+                            let label = pair.get(1).and_then(|x| x.as_str()).map(|s| s.to_string());
+                            Some(TextSegment { text, label })
+                        } else if let Ok(ts) = serde_json::from_value::<TextSegment>(item.clone()) {
+                            Some(ts)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+            }
+        }
+        self
+    }
+    /// Assigns specific hex colors for labels, e.g. `&[("PER", "#10b981"), ("ORG", "#6366f1")]`.
+    pub fn color_map(mut self, map: &[(&str, &str)]) -> Self {
+        self.color_map = map.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        self
+    }
+    /// Shows or hides the color legend bar above the text.
+    pub fn show_legend(mut self, on: bool) -> Self { self.show_legend = on; self }
+}
+
+impl Component for HighlightedText {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "highlightedtext" }
+    fn role(&self) -> Role { Role::Output }
+    fn props(&self) -> Value {
+        let colors: serde_json::Map<String, Value> = self
+            .color_map
+            .iter()
+            .map(|(k, v)| (k.clone(), Value::String(v.clone())))
+            .collect();
+        json!({
+            "label": self.label,
+            "segments": self.segments,
+            "color_map": colors,
+            "show_legend": self.show_legend
+        })
+    }
+}
+
+/// **CodeDiff** component: comparative diff viewer for AI code generation and
+/// refactoring, featuring addition (`+`), deletion (`-`), and line numbering.
+#[derive(Clone, Debug)]
+pub struct CodeDiff {
+    id: String,
+    label: String,
+    old_code: String,
+    new_code: String,
+    language: String,
+    split_view: bool,
+}
+
+impl CodeDiff {
+    /// Creates a code diff viewer with its identifier. Output by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: String::new(),
+            old_code: String::new(),
+            new_code: String::new(),
+            language: "rust".into(),
+            split_view: false,
+        }
+    }
+    /// Label displayed above the diff viewer.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Base original code string.
+    pub fn old_code(mut self, s: impl Into<String>) -> Self { self.old_code = s.into(); self }
+    /// Updated / proposed new code string.
+    pub fn new_code(mut self, s: impl Into<String>) -> Self { self.new_code = s.into(); self }
+    /// Programming language tag for styling.
+    pub fn language(mut self, lang: impl Into<String>) -> Self { self.language = lang.into(); self }
+    /// Enables split view (side-by-side) instead of unified diff.
+    pub fn split_view(mut self, on: bool) -> Self { self.split_view = on; self }
+}
+
+impl Component for CodeDiff {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "codediff" }
+    fn role(&self) -> Role { Role::Output }
+    fn props(&self) -> Value {
+        json!({
+            "label": self.label,
+            "old_code": self.old_code,
+            "new_code": self.new_code,
+            "language": self.language,
+            "split_view": self.split_view
+        })
+    }
+}
+
+/// **Model3D** component (`gr.Model3D` equivalent): lightweight 3D mesh viewer
+/// supporting Wavefront OBJ files with interactive orbit rotation and zoom.
+#[derive(Clone, Debug)]
+pub struct Model3D {
+    id: String,
+    label: String,
+    value: String,
+    clear_color: String,
+    interactive: bool,
+}
+
+impl Model3D {
+    /// Creates a 3D model viewer with its identifier. Output by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: String::new(),
+            clear_color: "#1e293b".into(),
+            interactive: true,
+        }
+    }
+    /// Label displayed above the 3D viewer.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// 3D model data (raw OBJ string or data URL).
+    pub fn value(mut self, v: impl Into<String>) -> Self { self.value = v.into(); self }
+    /// Background clear color hex code.
+    pub fn clear_color(mut self, hex: impl Into<String>) -> Self { self.clear_color = hex.into(); self }
+    /// Enables mouse rotation and zoom controls.
+    pub fn interactive(mut self, on: bool) -> Self { self.interactive = on; self }
+}
+
+impl Component for Model3D {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "model3d" }
+    fn role(&self) -> Role { Role::Output }
+    fn props(&self) -> Value {
+        json!({
+            "label": self.label,
+            "value": self.value,
+            "clear_color": self.clear_color,
+            "interactive": self.interactive
+        })
+    }
+}
+
+/// **Html** component (`gr.HTML` equivalent, reinforced): embeds custom HTML,
+/// CSS, and scoped JavaScript with robust event delegation and lifecycle safety.
+///
+/// Dispatches clicks on inner elements bearing `data-grio-action="click"` or changes
+/// on inputs/selects bearing `data-grio-change` directly to the WebSocket event loop.
+#[derive(Clone, Debug)]
+pub struct Html {
+    id: String,
+    label: String,
+    value: String,
+    out: bool,
+}
+
+impl Html {
+    /// Creates a custom HTML component with its identifier. Output by default.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: String::new(),
+            value: String::new(),
+            out: true,
+        }
+    }
+    /// Optional label displayed above the custom HTML container.
+    pub fn label(mut self, l: impl Into<String>) -> Self { self.label = l.into(); self }
+    /// Raw HTML string content.
+    pub fn value(mut self, h: impl Into<String>) -> Self { self.value = h.into(); self }
+    /// Declares the component as **Input** (value emitted on change).
+    pub fn input(mut self) -> Self { self.out = false; self }
+    /// Declares the component as **Output** (default, viewer).
+    pub fn output(mut self) -> Self { self.out = true; self }
+}
+
+impl Component for Html {
+    fn id(&self) -> &str { &self.id }
+    fn kind(&self) -> &'static str { "html" }
+    fn role(&self) -> Role { if self.out { Role::Output } else { Role::Input } }
+    fn props(&self) -> Value {
+        json!({
+            "label": self.label,
+            "value": self.value
+        })
     }
 }

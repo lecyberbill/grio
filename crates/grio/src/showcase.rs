@@ -1,0 +1,326 @@
+//! Native Showcase application generator showcasing all interactive components.
+
+use crate::app::App;
+use crate::components::*;
+use crate::context::{AlertLevel, Context};
+use crate::Result;
+
+impl App {
+    /// Creates a pre-configured showcase application
+    /// demonstrating all interactive `grio` components.
+    ///
+    /// Ready to run in a single line:
+    /// ```no_run
+    /// grio::App::showcase().launch("127.0.0.1:7860")?;
+    /// # Ok::<(), grio::Error>(())
+    /// ```
+    pub fn showcase() -> Self {
+        App::new("Showcase · grio")
+            .subtitle("Interactive gallery of all components — zero frontend dependencies")
+            .max_width(1280)
+            .run_label("Test Submission (Run)")
+
+            // Reactive Handlers
+            .on_click("btn_toast_info", |ctx| {
+                ctx.alert(AlertLevel::Info, "This is an informational notification.");
+                Ok(())
+            })
+            .on_click("btn_toast_success", |ctx| {
+                ctx.alert(AlertLevel::Success, "Operation completed successfully!");
+                Ok(())
+            })
+            .on_click("btn_toast_warn", |ctx| {
+                ctx.alert(AlertLevel::Warn, "Warning: Inference threshold reached.");
+                Ok(())
+            })
+            .on_click("btn_toast_error", |ctx| {
+                ctx.alert(AlertLevel::Error, "Simulated compute error.");
+                Ok(())
+            })
+            .on_click("btn_bot_stream", |ctx| {
+                ctx.append("chat_demo", "Hello! I am the grio assistant. Here is a streamed token-by-token response over native WebSockets.");
+                ctx.alert(AlertLevel::Success, "Message generated in Chatbot");
+                Ok(())
+            })
+            .on_click("btn_prog_sim", |ctx| {
+                ctx.progress("prog_bar", 0.75, "Loading model weights: 75%");
+                ctx.progress("prog_circle", 0.85, "Epoch 85/100");
+                ctx.progress("prog_pie", 0.60, "VRAM allocated: 60%");
+                ctx.alert(AlertLevel::Info, "Progress gauges updated!");
+                Ok(())
+            })
+            .on_click("sc_custom_html", |ctx| {
+                ctx.alert(AlertLevel::Success, "'click' action received from custom HTML component (data-grio-action)!");
+                Ok(())
+            })
+            .on_change("sc_custom_html", |ctx| {
+                if let Ok(txt) = ctx.get::<String>("sc_custom_html") {
+                    ctx.alert(AlertLevel::Info, format!("Input received from HTML component: \"{txt}\""));
+                }
+                Ok(())
+            })
+            .on_click("btn_gencsv", |ctx| {
+                let n = ctx.get::<f64>("num_items").unwrap_or(5.0) as usize;
+                let mut csv = String::from("id,value,status\n");
+                for i in 1..=n {
+                    csv.push_str(&format!("{i},{},ok\n", i * 42));
+                }
+                use base64::Engine as _;
+                let b64 = base64::engine::general_purpose::STANDARD.encode(csv.as_bytes());
+                ctx.set("dl_btn", serde_json::json!({ "b64": b64, "mime": "text/csv" }));
+                ctx.alert(AlertLevel::Success, format!("Generated CSV export ({n} rows)!"));
+                Ok(())
+            })
+            .on_change("sc_slider", |ctx| {
+                let v = ctx.get::<f64>("sc_slider").unwrap_or(0.0);
+                ctx.set("sc_slider_echo", format!("{:.2}", v));
+                Ok(())
+            })
+            .on_change("sc_color", |ctx| {
+                let c = ctx.get::<String>("sc_color").unwrap_or_default();
+                ctx.set("sc_color_echo", format!("Active color: {c}"));
+                Ok(())
+            })
+            .on_submit(showcase_submit)
+            .flow(
+                &[
+                    "sc_text", "num_items", "sc_slider", "sc_range", "sc_radio_pills",
+                    "sc_radio_classic", "sc_dropdown", "sc_check", "sc_date", "sc_time",
+                    "sc_color", "sc_recorder", "sc_df", "sc_json", "sc_sortable",
+                ],
+                &["sc_summary"],
+            )
+
+            // Tabs structure
+            .tabs(|t| {
+                t
+                // --- Tab 1 : Forms & Controls ---
+                .tab("🎛️ Forms & Controls", |b| {
+                    b.row(|r| {
+                        r.item(Text::new("sc_text").label("Simple Text Input").value("My AI Model"));
+                        r.item(Number::new("num_items").label("Items Count (Stepper)").value(5.0).min(1.0).max(20.0).step(1.0));
+                    });
+                    b.row(|r| {
+                        r.item(Slider::new("sc_slider").label("Temperature (Slider)").min(0.0).max(1.0).step(0.05).value(0.7));
+                        r.item(Label::new("sc_slider_echo").label("Slider Echo").value("0.70").variant("success"));
+                    });
+                    b.item(SliderRange::new("sc_range")
+                        .label("Confidence Range (SliderRange)")
+                        .min(0.0).max(100.0).step(1.0)
+                        .value(20.0, 80.0)
+                        .unit("%"));
+                    b.row(|r| {
+                        r.item(Radio::new("sc_radio_pills")
+                            .label("Architecture (Radio - Pills style)")
+                            .choices(&["transformer", "mamba", "diffusion", "hybrid"])
+                            .value("mamba"));
+                        r.item(Radio::new("sc_radio_classic")
+                            .label("Precision (Radio - Classic style)")
+                            .style("radio")
+                            .choices(&["Q4_K_M", "Q8_0", "F16"])
+                            .value("Q4_K_M"));
+                    });
+                    b.row(|r| {
+                        r.item(Dropdown::new("sc_dropdown")
+                            .label("Model Selection (Dropdown)")
+                            .choices(&[("llama3", "Llama 3 (8B)"), ("mistral", "Mistral (7B)"), ("qwen", "Qwen 2.5 (7B)")])
+                            .value("mistral"));
+                        r.item(Checkbox::new("sc_check").label("Enable GPU Acceleration").value(true));
+                    });
+                    b.row(|r| {
+                        r.item(DatePicker::new("sc_date").label("Date").value("2026-09-03"));
+                        r.item(TimePicker::new("sc_time").label("Time").value("10:15"));
+                        r.item(ColorPicker::new("sc_color").label("Accent Color").value("#6366f1"));
+                    });
+                    b.item(Label::new("sc_color_echo").label("Color Selection").value("Active color: #6366f1"));
+                    b.item(SortableList::new("sc_sortable")
+                        .label("Inference Pipeline Order (SortableList drag & drop)")
+                        .items(&[
+                            ("p1", "1. Embeddings & Tokenization"),
+                            ("p2", "2. Attention KV-Cache"),
+                            ("p3", "3. Multimodal Feed-Forward"),
+                            ("p4", "4. Sampling & Quantization"),
+                        ]));
+                })
+
+                // --- Tab 2 : Media & Vision ---
+                .tab("🖼️ Media & Vision", |b| {
+                    b.row(|r| {
+                        r.item(Image::new("sc_img").label("Image (upload / preview)").output().value("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500"));
+                        r.item(Gallery::new("sc_gallery").label("Image Gallery").columns(3).output());
+                    });
+                    b.item(AnnotatedImage::new("sc_annotated")
+                        .label("Vision AI: Object Detection (AnnotatedImage)")
+                        .image("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500")
+                        .box_norm(0.12, 0.28, 0.72, 0.72, "person", Some(0.96), "#6366f1")
+                        .box_norm(0.65, 0.35, 0.95, 0.65, "clothing", Some(0.88), "#10b981"));
+                    b.item(ImageComparison::new("sc_comp")
+                        .label("Before / After Comparison (ImageComparison)")
+                        .before("https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=300", "Low Resolution (Original)")
+                        .after("https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=800", "4x Upscaled (Super-Resolution)")
+                        .position(50.0));
+                    b.item(ImageEditor::new("sc_editor")
+                        .label("Image Editor & Inpainting Mask (ImageEditor)")
+                        .value("https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=800")
+                        .layers(2));
+                    b.row(|r| {
+                        r.item(Audio::new("sc_audio").label("Audio Player").output());
+                        r.item(AudioRecorder::new("sc_recorder").label("Voice Recorder ASR (AudioRecorder)"));
+                        r.item(Video::new("sc_video").label("Video Player"));
+                    });
+                    b.item(Model3D::new("sc_m3d").label("3D Viewer (Model3D WebGL)"));
+                })
+
+                // --- Tab 3 : Data, Files & Code ---
+                .tab("📊 Data, Files & Code", |b| {
+                    b.item(HighlightedText::new("sc_ner")
+                        .label("Named Entity Recognition (HighlightedText / NER)")
+                        .segments(&[
+                            ("Google ", Some("ORG")),
+                            ("was founded by ", None),
+                            ("Larry Page ", Some("PER")),
+                            ("and ", None),
+                            ("Sergey Brin ", Some("PER")),
+                            ("at ", None),
+                            ("Stanford University", Some("LOC")),
+                            (". Model evaluation score is ", None),
+                            ("outstanding", Some("POSITIVE")),
+                            (".", None),
+                        ]));
+                    b.item(CodeDiff::new("sc_diff")
+                        .label("AI Code Comparator (CodeDiff)")
+                        .old_code("fn compute(x: f64) -> f64 {\n    x * 2.0\n}")
+                        .new_code("fn compute(x: f64) -> f64 {\n    // SIMD optimization\n    let res = x.mul_add(2.0, 1.0);\n    res.clamp(0.0, 100.0)\n}"));
+                    b.item(Dataframe::new("sc_df")
+                        .label("Interactive Data Table (Dataframe)")
+                        .headers(&["ID", "Model", "Throughput (tok/s)", "VRAM (GB)"])
+                        .data(&serde_json::json!([
+                            [1, "Llama-3-8B", 84.5, 5.2],
+                            [2, "Mistral-7B", 92.1, 4.8],
+                            [3, "Qwen-2.5-7B", 105.4, 4.4]
+                        ]))
+                        .interactive(false));
+                    b.row(|r| {
+                        r.item(Code::new("sc_code")
+                            .label("Syntax-Highlighted Code Editor")
+                            .language("rust")
+                            .value("fn evaluate(ctx: &Context) -> grio::Result<()> {\n    println!(\"Running grio evaluation...\");\n    Ok(())\n}")
+                            .output()
+                            .lines(true));
+                        r.item(Json::new("sc_json")
+                            .label("Realtime Validated JSON Editor")
+                            .value(serde_json::json!({
+                                "model": "qwen-2.5",
+                                "quant": "Q4_K_M",
+                                "temperature": 0.7,
+                                "top_p": 0.95
+                            })));
+                    });
+                    b.row(|r| {
+                        r.item(File::new("sc_file").label("Multi-File Upload (File)").types(&["image/*", "text/*"]).interactive(true));
+                        r.item(Explorer::new("sc_explorer").label("Server Explorer (Explorer)").root(".").pattern("*.rs"));
+                    });
+                    b.item(Html::new("sc_custom_html")
+                        .label("Custom HTML / JS Component (Robust Events & window.grio Bridge)")
+                        .value(r#"
+                            <div style="padding: 16px; background: var(--mg-surface-2); border: 1px solid var(--mg-border); border-radius: var(--mg-radius); display: flex; flex-direction: column; gap: 12px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--mg-border); padding-bottom: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 1.2rem;">⚡</span>
+                                        <strong>Sandboxed & Reactive Custom HTML / JS</strong>
+                                        <span class="mg-badge" style="background: rgba(99,102,241,0.15); color: var(--mg-primary); font-size: 0.75rem; padding: 2px 8px; border-radius: 9999px;">Event Delegation & Bidirectional API</span>
+                                    </div>
+                                    <span style="font-size: 0.8rem; color: var(--mg-muted);">Seamless integration with the Rust backend</span>
+                                </div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+                                    <button class="mg-btn mg-btn-sm" data-grio-action="click" data-grio-payload='{"action":"pulse", "mode":"turbo"}' style="cursor: pointer;">
+                                        🚀 Delegated Action (Click)
+                                    </button>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <label style="font-size: 0.85rem; color: var(--mg-muted);">Live note:</label>
+                                        <input type="text" data-grio-change class="mg-input" placeholder="Type text..." style="padding: 4px 8px; font-size: 0.85rem; border-radius: 4px; border: 1px solid var(--mg-border); background: var(--mg-bg); color: var(--mg-text);">
+                                    </div>
+                                    <span id="grio_bridge_badge" style="font-size: 0.8rem; color: #10b981; margin-left: auto;">🟢 window.grio active</span>
+                                </div>
+                                <script>
+                                    // Scoped and secure script with local 'element' and 'grio' injection
+                                    grio.on("sc_custom_html", function(patch) {
+                                        console.log("[showcase] Patch received from Rust backend:", patch);
+                                    });
+                                </script>
+                            </div>
+                        "#));
+                })
+
+                // --- Tab 4 : AI Chat & Observability ---
+                .tab("🤖 Chatbot & Observability", |b| {
+                    b.row(|r| {
+                        r.item(Metric::new("m_tps").label("Throughput").value("94.2").unit("tok/s").delta("+14.5%"));
+                        r.item(Metric::new("m_ttft").label("TTFT").value("142").unit("ms").delta("-18ms").delta_color("pos"));
+                        r.item(Metric::new("m_vram").label("GPU VRAM").value("5.2").unit("GB").delta("Stable").delta_color("neutral"));
+                    });
+                    b.item(Chatbot::new("chat_demo")
+                        .label("LLM Chatbot (Markdown & Streaming)")
+                        .messages(vec![
+                            ChatMessage::user("How fast is grio?"),
+                            ChatMessage::assistant("grio is built in **pure Rust** with asynchronous WebSockets and zero heavy JS frameworks: response times are under 2 ms."),
+                        ]));
+                    b.row(|r| {
+                        r.item(Button::new("btn_bot_stream").label("Simulate LLM Stream"));
+                        r.item(WithLayout::new(Button::new("btn_gencsv").label("Generate CSV Export").secondary()).scale(1));
+                        r.item(DownloadButton::new("dl_btn").label("Download CSV").filename("export_grio.csv"));
+                    });
+                    b.item(Plot::new("sc_plot")
+                        .label("Native SVG Chart (zero dependencies)")
+                        .data(&serde_json::json!({
+                            "variant": "line",
+                            "labels": ["P1", "P2", "P3", "P4", "P5", "P6"],
+                            "series": [
+                                { "name": "Prompt eval", "data": [12.0, 18.0, 24.0, 35.0, 48.0, 52.0] },
+                                { "name": "Generation", "data": [80.0, 85.0, 92.0, 95.0, 102.0, 108.0] }
+                            ]
+                        })));
+                })
+
+                // --- Tab 5 : System, Gauges & Documentation ---
+                .tab("⚙️ System, Gauges & Docs", |b| {
+                    b.row(|r| {
+                        r.item(Button::new("btn_toast_info").label("Toast Info"));
+                        r.item(Button::new("btn_toast_success").label("Toast Success"));
+                        r.item(Button::new("btn_toast_warn").label("Toast Warn").secondary());
+                        r.item(Button::new("btn_toast_error").label("Toast Error").secondary());
+                        r.item(Button::new("btn_prog_sim").label("Simulate Progress (Gauges)"));
+                    });
+                    b.row(|r| {
+                        r.item(Progress::new("prog_bar").label("Progress (Bar)").bar());
+                        r.item(Progress::new("prog_circle").label("Progress (Circle)").circle().size(84));
+                        r.item(Progress::new("prog_pie").label("Progress (Pie)").pie().size(84));
+                    });
+                    b.item(Accordion::new("sc_acc").open(true).section("ℹ️ Architecture & Invariants Guide", |s| {
+                        s.item(Markdown::new("sc_md").value("### grio Architecture\n- **100% Rust** backend powered by Tokio & Axum.\n- **Zero npm/node_modules** : Embedded modern CSS3 & Vanilla JS.\n- **Auto-generated REST & OpenAPI 3.0** endpoints for every interface."));
+                    }));
+                    b.item(Timer::new("sc_timer").label("Periodic Clock / Timer").interval(5.0));
+                    b.item(Output::new("sc_summary").label("Form Snapshot (Submit Output)"));
+                })
+            })
+    }
+}
+
+fn showcase_submit(ctx: &mut Context) -> Result<()> {
+    let mut out = String::from("=== SHOWCASE SUBMISSION RESULT ===\n\n");
+    if let Ok(t) = ctx.get::<String>("sc_text") { out.push_str(&format!("• Text: {t}\n")); }
+    if let Ok(n) = ctx.get::<f64>("num_items") { out.push_str(&format!("• Item count: {n}\n")); }
+    if let Ok(s) = ctx.get::<f64>("sc_slider") { out.push_str(&format!("• Slider: {s}\n")); }
+    if let Ok(r) = ctx.get::<(f64, f64)>("sc_range") { out.push_str(&format!("• SliderRange bounds: [{:.1}, {:.1}]\n", r.0, r.1)); }
+    if let Ok(pills) = ctx.get::<String>("sc_radio_pills") { out.push_str(&format!("• Architecture (pills): {pills}\n")); }
+    if let Ok(rad) = ctx.get::<String>("sc_radio_classic") { out.push_str(&format!("• Precision (radio): {rad}\n")); }
+    if let Ok(drop) = ctx.get::<String>("sc_dropdown") { out.push_str(&format!("• Dropdown: {drop}\n")); }
+    if let Ok(chk) = ctx.get::<bool>("sc_check") { out.push_str(&format!("• GPU Acceleration: {chk}\n")); }
+    if let Ok(col) = ctx.get::<String>("sc_color") { out.push_str(&format!("• Chosen color: {col}\n")); }
+    if let Ok(sort) = ctx.get::<Vec<String>>("sc_sortable") { out.push_str(&format!("• SortableList order: {:?}\n", sort)); }
+    if let Ok(j) = ctx.get::<serde_json::Value>("sc_json") { out.push_str(&format!("• Valid JSON: {}\n", j)); }
+    
+    ctx.set("sc_summary", out);
+    ctx.alert(AlertLevel::Success, "Complete submission recorded!");
+    Ok(())
+}

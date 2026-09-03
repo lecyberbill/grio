@@ -90,6 +90,15 @@ fn main() -> grio::Result<()> {
             if let Ok(files) = ctx.get::<Vec<serde_json::Value>>("docs") {
                 s.push_str(&format!("attachments: {} file(s)\n", files.len()));
             }
+            if let Ok(arch) = ctx.get::<String>("arch") {
+                s.push_str(&format!("architecture radio: {arch}\n"));
+            }
+            if let Ok(thresh) = ctx.get::<(f64, f64)>("thresholds") {
+                s.push_str(&format!("confidence threshold range: [{:.2}, {:.2}]\n", thresh.0, thresh.1));
+            }
+            if let Ok(color) = ctx.get::<String>("color") {
+                s.push_str(&format!("theme color: {color}\n"));
+            }
             ctx.set("summary", s);
             Ok(())
         })
@@ -214,6 +223,28 @@ fn main() -> grio::Result<()> {
                 r.item(WithLayout::new(Button::new("gencsv").label("Generate CSV").secondary()).scale(1));
                 r.item(DownloadButton::new("dl").label("Download CSV").filename("rapport.csv"));
             });
+        })
+
+        // --- Phase 8: Controls & Selection (Lot 1) ---
+        .panel("Phase 8 (Lot 1) — Controls & Selection", |p| {
+            p.min_width(460);
+            p.item(Radio::new("arch")
+                .label("Model Architecture (pills style)")
+                .choices(&["transformer", "mamba", "diffusion", "hybrid"])
+                .value("mamba"));
+            p.item(Radio::new("precision")
+                .label("Quantization (classic radio style)")
+                .style("radio")
+                .choices(&["Q4_K_M", "Q8_0", "F16"])
+                .value("Q4_K_M"));
+            p.item(SliderRange::new("thresholds")
+                .label("Inference Threshold Window")
+                .min(0.0).max(1.0).step(0.01)
+                .value(0.15, 0.85)
+                .unit("%"));
+            p.item(ColorPicker::new("color")
+                .label("UI Accent Color")
+                .value("#8b5cf6"));
         })
 
         .panel("About", |p| {

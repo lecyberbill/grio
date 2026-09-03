@@ -49,6 +49,309 @@ async fn test_api_schema_and_predict_flow() {
     assert!(auth_ok.contains("Ada x4"));
 }
 
+#[tokio::test]
+async fn test_lot1_controls_api_predict() {
+    let app = App::new("Test Lot 1")
+        .item(Radio::new("arch").choices(&["mamba", "transformer"]).value("mamba"))
+        .item(SliderRange::new("range").min(0.0).max(100.0).value(10.0, 90.0).unit("%"))
+        .item(ColorPicker::new("color").value("#10b981"))
+        .item(Output::new("out"))
+        .item(Output::new("event_echo"))
+        .on_change("arch", |ctx| {
+            let choice: String = ctx.get("arch")?;
+            ctx.set("event_echo", format!("changed_to_{choice}"));
+            Ok(())
+        })
+        .on_change("range", |ctx| {
+            let (lo, hi): (f64, f64) = ctx.get("range")?;
+            ctx.set("event_echo", format!("range_{lo}_{hi}"));
+            Ok(())
+        })
+        .on_change("color", |ctx| {
+            let col: String = ctx.get("color")?;
+            ctx.set("event_echo", format!("color_{col}"));
+            Ok(())
+        })
+        .on_submit(|ctx| {
+            let arch: String = ctx.get("arch")?;
+            let range: (f64, f64) = ctx.get("range")?;
+            let color: String = ctx.get("color")?;
+            ctx.set("out", format!("{arch} [{:.0}-{:.0}] {color}", range.0, range.1));
+            Ok(())
+        });
+
+    let port = 17866;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // 1. Validation du rendu HTML servi (data-kind radio, sliderrange, colorpicker)
+    let index_html = http_get(&format!("http://127.0.0.1:{port}/")).await;
+    assert!(index_html.contains(r#"data-kind="radio""#), "Radio widget must be in HTML");
+    assert!(index_html.contains(r#"data-kind="sliderrange""#), "SliderRange widget must be in HTML");
+    assert!(index_html.contains(r#"data-kind="colorpicker""#), "ColorPicker widget must be in HTML");
+
+    // 2. Validation du schéma d'API OpenAPI
+    let openapi = http_get(&format!("http://127.0.0.1:{port}/api/openapi.json")).await;
+    assert!(openapi.contains("arch"), "Schema must include arch");
+    assert!(openapi.contains("range"), "Schema must include range");
+    assert!(openapi.contains("color"), "Schema must include color");
+
+    // 3. Validation de prédiction /api/predict complète
+    let resp = http_post(
+        &format!("http://127.0.0.1:{port}/api/predict"),
+        r##"{"data":["transformer",[20,80],"#ef4444"]}"##,
+        None,
+    )
+    .await;
+    assert!(resp.contains("transformer [20-80] #ef4444"), "Prediction response must match payload: {resp}");
+}
+
+#[tokio::test]
+async fn test_showcase_boot_and_components() {
+    let app = App::showcase();
+    let port = 17867;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(350)).await;
+
+    // 1. Validation de la page d'accueil du showcase
+    let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
+    assert!(html.contains("Showcase · grio"), "Title must be present");
+    assert!(html.contains(r#"data-kind="chatbot""#), "Chatbot must be mounted");
+    assert!(html.contains(r#"data-kind="dataframe""#), "Dataframe must be mounted");
+    assert!(html.contains(r#"data-kind="metric""#), "Metric must be mounted");
+    assert!(html.contains(r#"data-kind="imageeditor""#), "ImageEditor must be mounted");
+    assert!(html.contains(r#"data-kind="sliderrange""#), "SliderRange must be mounted");
+    assert!(html.contains(r#"data-kind="colorpicker""#), "ColorPicker must be mounted");
+    assert!(html.contains(r#"data-kind="radio""#), "Radio must be mounted");
+    assert!(html.contains(r#"data-kind="plot""#), "Plot must be mounted");
+    assert!(html.contains(r#"data-kind="annotatedimage""#), "AnnotatedImage must be mounted");
+    assert!(html.contains(r#"data-kind="imagecomparison""#), "ImageComparison must be mounted");
+    assert!(html.contains(r#"data-kind="audiorecorder""#), "AudioRecorder must be mounted");
+    assert!(html.contains(r#"data-kind="list""#), "SortableList (kind 'list') must be mounted");
+    assert!(html.contains(r#"data-kind="explorer""#), "Explorer must be mounted");
+    assert!(html.contains(r#"data-kind="file""#), "File must be mounted");
+    assert!(html.contains(r#"data-kind="accordion""#), "Accordion must be mounted");
+    assert!(html.contains(r#"data-kind="progress""#), "Progress must be mounted");
+    assert!(html.contains(r#"data-kind="highlightedtext""#), "HighlightedText must be mounted");
+    assert!(html.contains(r#"data-kind="codediff""#), "CodeDiff must be mounted");
+    assert!(html.contains(r#"data-kind="model3d""#), "Model3D must be mounted");
+    assert!(html.contains(r#"data-kind="html""#), "Html must be mounted");
+
+    // 2. Validation de la spécification OpenAPI
+    let openapi = http_get(&format!("http://127.0.0.1:{port}/api/openapi.json")).await;
+    assert!(openapi.contains("sc_text"), "OpenAPI must include showcase inputs");
+    assert!(openapi.contains("sc_slider"), "OpenAPI must include sc_slider");
+    assert!(openapi.contains("sc_color"), "OpenAPI must include sc_color");
+
+    // 3. Validation de prédiction /api/predict sur le showcase
+    let resp = http_post(
+        &format!("http://127.0.0.1:{port}/api/predict"),
+        r##"{"inputs":{"sc_text":"My AI Test","num_items":7,"sc_slider":0.85,"sc_range":[15,85],"sc_radio_pills":"mamba","sc_radio_classic":"Q4_K_M","sc_dropdown":"qwen","sc_check":true,"sc_date":"2026-09-03","sc_time":"12:00","sc_color":"#10b981","sc_editor":{"image":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=","mask":""},"sc_recorder":"data:audio/webm;base64,GkX=","sc_df":[],"sc_json":{"model":"qwen"},"sc_sortable":["p1","p2","p3","p4"],"sc_file":[],"sc_explorer":""}}"##,
+        None,
+    )
+    .await;
+    assert!(resp.contains("SHOWCASE SUBMISSION RESULT"), "Submit handler must process inputs: {resp}");
+    assert!(resp.contains("My AI Test"), "Result must contain submitted text");
+    assert!(resp.contains("SortableList order"), "Result must contain SortableList snapshot");
+}
+
+#[tokio::test]
+async fn test_lot2_vision_and_audio_integration() {
+    let app = App::new("Test Lot 2 Vision")
+        .item(AnnotatedImage::new("annotated")
+            .image("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+            .box_norm(0.1, 0.2, 0.8, 0.9, "dog", Some(0.95), "#10b981"))
+        .item(ImageComparison::new("comp")
+            .before("data:image/png;base64,before", "Original")
+            .after("data:image/png;base64,after", "Upscaled")
+            .position(45.0))
+        .item(AudioRecorder::new("rec").label("Direct Mic Recording"))
+        .item(Output::new("out"))
+        .on_submit(|ctx| {
+            let audio: String = ctx.get("rec")?;
+            ctx.set("out", format!("recorded_audio_len_{}", audio.len()));
+            Ok(())
+        });
+
+    let port = 17868;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // 1. DOM validation
+    let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
+    assert!(html.contains(r#"data-kind="annotatedimage""#), "AnnotatedImage in DOM");
+    assert!(html.contains(r#"data-kind="imagecomparison""#), "ImageComparison in DOM");
+    assert!(html.contains(r#"data-kind="audiorecorder""#), "AudioRecorder in DOM");
+    assert!(html.contains("dog"), "Class label present in initial props");
+
+    // 2. Predict validation
+    let resp = http_post(
+        &format!("http://127.0.0.1:{port}/api/predict"),
+        r##"{"data":["data:audio/webm;base64,GkXfo59ChoEBQveBAULygQ8="]}"##,
+        None,
+    )
+    .await;
+    assert!(resp.contains("recorded_audio_len_47"), "Prediction should reflect audio input: {resp}");
+}
+
+#[tokio::test]
+async fn test_progress_variants_bar_circle_pie() {
+    let app = App::new("Test Progress Variants")
+        .item(Progress::new("p_bar").label("Download Bar").bar())
+        .item(Progress::new("p_circle").label("Epoch Circle").circle().size(96))
+        .item(Progress::new("p_pie").label("Quota Pie").pie().size(80))
+        .item(Output::new("out"))
+        .on_submit(|ctx| {
+            ctx.progress("p_bar", 0.65, "Téléchargement 65%");
+            ctx.progress("p_circle", 0.90, "Époque 9/10");
+            ctx.progress("p_pie", 0.40, "Quota 40%");
+            ctx.set("out", "progress_updated");
+            Ok(())
+        });
+
+    let port = 17869;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // 1. DOM validation
+    let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
+    assert!(html.contains(r#"data-kind="progress""#), "Progress in DOM");
+    assert!(html.contains("p_bar"), "p_bar in DOM");
+    assert!(html.contains("p_circle"), "p_circle in DOM");
+    assert!(html.contains("p_pie"), "p_pie in DOM");
+    assert!(html.contains("Download Bar"), "Label bar present");
+    assert!(html.contains("Epoch Circle"), "Label circle present");
+    assert!(html.contains("Quota Pie"), "Label pie present");
+
+    // 2. Predict execution
+    let resp = http_post(
+        &format!("http://127.0.0.1:{port}/api/predict"),
+        r##"{"data":[]}"##,
+        None,
+    )
+    .await;
+    assert!(resp.contains("progress_updated"), "Predict output must be received: {resp}");
+}
+
+#[tokio::test]
+async fn test_lot4_specialized_components_integration() {
+    let app = App::new("Test Lot 4 Specialized")
+        .item(HighlightedText::new("ht")
+            .segments(&[
+                ("Mistral ", Some("MODEL")),
+                ("est hébergé en ", None),
+                ("Europe", Some("LOC")),
+            ]))
+        .item(CodeDiff::new("diff")
+            .old_code("let a = 1;")
+            .new_code("let a = 2; // updated"))
+        .item(Model3D::new("mesh").value("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3"))
+        .item(Output::new("out"))
+        .on_submit(|ctx| {
+            ctx.set("out", "lot4_verified");
+            Ok(())
+        });
+
+    let port = 17870;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // 1. DOM validation
+    let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
+    assert!(html.contains(r#"data-kind="highlightedtext""#), "HighlightedText mounted");
+    assert!(html.contains(r#"data-kind="codediff""#), "CodeDiff mounted");
+    assert!(html.contains(r#"data-kind="model3d""#), "Model3D mounted");
+    assert!(html.contains("MODEL"), "Tag MODEL present in DOM");
+    assert!(html.contains("Europe"), "Text Europe present in DOM");
+
+    // 2. Predict execution
+    let resp = http_post(
+        &format!("http://127.0.0.1:{port}/api/predict"),
+        r##"{"data":[]}"##,
+        None,
+    )
+    .await;
+    assert!(resp.contains("lot4_verified"), "Prediction output should be received: {resp}");
+}
+
+#[tokio::test]
+async fn test_html_custom_component_robustness() {
+    let app = App::new("Test HTML Robustness")
+        .item(Html::new("custom_ui")
+            .label("Custom Dynamic Widget")
+            .value(r#"
+                <div class="custom-card">
+                    <h3>Custom Interactive HTML</h3>
+                    <button data-grio-action="click" data-grio-payload='{"btn":"calc"}'>Action Button</button>
+                    <input type="text" data-grio-change name="user_note" value="Initial text">
+                </div>
+            "#))
+        .item(Output::new("out"))
+        .on_click("custom_ui", |ctx| {
+            ctx.set("out", "custom_html_click_received");
+            Ok(())
+        })
+        .on_change("custom_ui", |ctx| {
+            ctx.set("out", "custom_html_change_received");
+            Ok(())
+        });
+
+    let port = 17871;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // 1. Validation du montage DOM du composant HTML
+    let html = http_get(&format!("http://127.0.0.1:{port}/")).await;
+    assert!(html.contains(r#"data-kind="html""#), "Html component mounted in DOM");
+    assert!(html.contains("custom-card"), "Custom card class present in DOM");
+    assert!(html.contains("data-grio-action"), "Event delegation attribute present in DOM");
+
+    // 2. Validation d'appel predict simulant une interaction
+    let resp = http_post(
+        &format!("http://127.0.0.1:{port}/api/predict"),
+        r##"{"data":[]}"##,
+        None,
+    )
+    .await;
+    assert!(resp.contains("true"), "API Predict response valid");
+}
+
 async fn http_get(url: &str) -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpStream;

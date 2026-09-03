@@ -23,6 +23,24 @@ fn main() {
             };
             create_project(name, template);
         }
+        "showcase" | "demo" => {
+            let mut port = "7860".to_string();
+            let mut i = 2;
+            while i < args.len() {
+                if (args[i] == "--port" || args[i] == "-p") && i + 1 < args.len() {
+                    port = args[i + 1].clone();
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+            let addr = format!("0.0.0.0:{port}");
+            println!("🚀 Starting grio Interactive Component Showcase on http://localhost:{port} ...");
+            if let Err(e) = grio::App::showcase().launch(&addr) {
+                eprintln!("Error running showcase: {e}");
+                std::process::exit(1);
+            }
+        }
         "version" | "--version" | "-V" => {
             println!("grio CLI v0.1.0 — declarative Rust AI app engine");
         }
@@ -44,12 +62,14 @@ USAGE:
     grio <COMMAND> [OPTIONS]
 
 COMMANDS:
+    showcase [--port <7860>]        Launch interactive gallery showcasing all grio components
     new <name> [--template <name>]  Create a new grio app project
                                     Templates: greet (default), chatbot, vision
     version                         Display CLI version
     help                            Show this help message
 
 EXAMPLES:
+    grio showcase
     grio new my-chat-app --template chatbot
     cd my-chat-app
     cargo run

@@ -843,6 +843,12 @@ fn render_page(app: &App) -> String {
         ""
     };
 
+    let shell_style = if let Some(mw) = app.max_width {
+        format!(" style=\"max-width: {mw}px;\"")
+    } else {
+        String::new()
+    };
+
     format!(
         r#"<!doctype html>
 <html lang="en"{theme_mode_attr}>
@@ -854,7 +860,7 @@ fn render_page(app: &App) -> String {
 {theme_style}
 </head>
 <body>
-<main class="mg-shell">
+<main class="mg-shell"{shell_style}>
   <header class="mg-header">
     <div class="mg-header-row">
       <h1 class="mg-title">{title}</h1>

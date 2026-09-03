@@ -85,6 +85,7 @@ cargo run -p grio --example greet
 
 | Example | Command | Highlights |
 |---|---|---|
+| **All-in-One Showcase** | `cargo run -p grio --example showcase` *(or `grio showcase`)* | **1-line demo of all 30+ components** in tabs: Controls, Vision, Data, Chat & Benchmarks |
 | **Multimodal AI Studio** | `cargo run -p grio --example prompt_to_image` | Autoregressive LLM (Candle Qwen 2.5 7B GGUF) + SDXL Image Diffusion + Live Analytics Dataframe & Plots |
 | **Chatbot** | `cargo run -p grio --example chatbot` | Conversational Chatbot widget with token-by-token streaming |
 | **Media & Vision** | `cargo run -p grio --example media` | Image, Audio (live mic streaming), Video (live camera streaming) |
@@ -125,23 +126,35 @@ d:\Projet\UI
 | Component | Kind | Role | Description | Key Builder Methods |
 |---|---|---|---|---|
 | `Text` | `text` | Input | Single-line or multi-line text input | `.label()`, `.value()`, `.placeholder()`, `.lines()`, `.interactive()` |
+| `Number` | `number` | Input | Numeric field with min/max/step & ± stepper | `.label()`, `.value()`, `.min()`, `.max()`, `.step()`, `.unit()` |
 | `Slider` | `slider` | Input | Numeric range slider | `.label()`, `.min()`, `.max()`, `.step()`, `.value()`, `.unit()` |
+| `SliderRange` | `sliderrange` | Input | Dual-thumb bounded range selector `[min, max]` | `.label()`, `.min()`, `.max()`, `.step()`, `.value(low, high)` |
+| `Radio` | `radio` | Input | Mutually exclusive selector (segmented pills or classic) | `.choices()`, `.style("pills"|"radio")`, `.direction()` |
 | `Checkbox` | `checkbox` | Input | Boolean toggle checkbox | `.label()`, `.value()`, `.interactive()` |
 | `Dropdown` | `dropdown` | Input | Select box (single, multiple, searchable) | `.choices()`, `.multiple()`, `.allow_custom()`, `.value()` |
 | `DatePicker` / `TimePicker` | `date` / `time` | Input | Native ISO date (`yyyy-mm-dd`) & time pickers | `.label()`, `.min()`, `.max()`, `.value()` |
-| `Chatbot` | `chatbot` | Output | Interactive conversation thread | `.bubble()`, `.placeholder()`, `.clear()` |
+| `ColorPicker` | `colorpicker` | Input | Palette selector with hex code & quick swatches | `.label()`, `.value()`, `.presets()` |
+| `SortableList` | `list` | Input | Drag & drop reorderable items list | `.label()`, `.items()`, `.value()` |
+| `File` | `file` | Input | Multi-file upload (click / drag & drop, progress) | `.label()`, `.multiple()`, `.types()`, `.max_size()` |
+| `Explorer` | `explorer` | Input | Server-side directory and file browser | `.root()`, `.pattern()` |
+| `AudioRecorder` | `audiorecorder` | Input | Live microphone recorder with animated pulse & timer | `.label()`, `.max_duration()`, `.interactive()` |
+| `Chatbot` | `chatbot` | Output | Interactive conversation thread with token streaming | `.messages()`, `.placeholder()`, `.height()` |
 | `Output` | `output` | Output | Standard rendered text or JSON output | `.label()`, `.value()` |
-| `Markdown` | `markdown` | Output | GitHub-flavored markdown renderer | `.text()`, `.render()` |
+| `Markdown` | `markdown` | Output | GitHub-flavored markdown renderer | `.text()`, `.value()` |
 | `Metric` | `metric` | Output | Analytics KPI card with value & delta badge | `.label()`, `.value()`, `.delta()`, `.delta_color()`, `.unit()` |
+| `Progress` | `progress` | Output | Dynamic progression (horizontal bar, SVG circle, or pie) | `.bar()`, `.circle()`, `.pie()`, `.size()` |
 | `Plot` | `plot` | Output | Pure SVG Charts (`line`, `bar`, `scatter`) | `.variant()`, `.title()`, `.xlabel()`, `.ylabel()`, `.colors()` |
+| `AnnotatedImage` | `annotatedimage` | Output | Bounding boxes overlay (labels, confidence scores, colors) | `.image()`, `.box_norm()`, `.boxes()` |
+| `ImageComparison` | `imagecomparison` | Output | Interactive before/after sliding curtain | `.before()`, `.after()`, `.position()` |
+| `HighlightedText` | `highlightedtext` | Output | NLP/NER text with labeled spans and color legend | `.segments()`, `.color_map()`, `.show_legend()` |
+| `CodeDiff` | `codediff` | Output | AI code refactoring diff with `+`/`-` line indicators | `.old_code()`, `.new_code()`, `.language()` |
+| `Model3D` | `model3d` | Output | Lightweight WebGL 3D viewer (Wavefront OBJ, orbit/zoom) | `.value()`, `.clear_color()`, `.interactive()` |
 | `Dataframe` | `dataframe` | In/Out | Interactive editable & sortable spreadsheet | `.headers()`, `.data()`, `.sortable()`, `.addable()`, `.interactive()` |
 | `Gallery` | `gallery` | In/Out | Media visualizer with lightbox popup | `.label()`, `.columns()`, `.upload()`, `.interactive()` |
-| `ImageEditor` | `imageeditor` | In/Out | Full canvas editor (draw, mask, crop, filters) | `.brush()`, `.crop()`, `.filters()`, `.layers()` |
+| `ImageEditor` | `imageeditor` | In/Out | Full canvas editor (draw, inpainting mask, crop, filters) | `.brush()`, `.crop()`, `.filters()`, `.layers()` |
 | `Code` | `code` | In/Out | Syntax-highlighted code editor | `.language()`, `.lines()`, `.theme()`, `.interactive()` |
-| `Explorer` | `explorer` | Input | Server-side directory and file browser | `.root()`, `.pattern()` |
-| `Number` | `number` | Input | Numeric field with min/max/step & ± stepper | `.label()`, `.value()`, `.min()`, `.max()`, `.step()`, `.unit()` |
-| `File` | `file` | Input | Multi-file upload (click / drag & drop, progress) | `.label()`, `.multiple()`, `.types()`, `.max_size()` |
 | `Json` | `json` | In/Out | Live-validated JSON editor / viewer | `.label()`, `.value()`, `.interactive()`, `.output()` |
+| `Html` | `html` | In/Out | Custom HTML/CSS/JS with event delegation & `window.grio` | `.value()`, `.input()`, `.output()` |
 | `Label` | `label` | Output | Gradio-style value badge with semantic color | `.label()`, `.value()`, `.variant()`, `.size()` |
 | `Timer` | `timer` | Output | Periodic clock emitting `change` each tick | `.label()`, `.interval()`, `.running()` |
 | `DownloadButton` | `download` | Output | Server-triggered file download | `.label()`, `.filename()`, `.value()` |

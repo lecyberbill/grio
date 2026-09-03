@@ -167,6 +167,8 @@ pub struct App {
     pub isolated_sessions: bool,
     /// Thème visuel de l'application.
     pub theme: Theme,
+    /// Largeur maximale du conteneur de l'application (ex: 1200px).
+    pub max_width: Option<u32>,
 }
 
 /// Collecteur d'éléments pour `App::row` / `column` / `panel` / `grid`.
@@ -257,6 +259,10 @@ impl RowBuilder {
     pub fn width(&mut self, w: u32) { self.layout.width = Some(w); }
     /// Hauteur du groupe, en pixels.
     pub fn height(&mut self, h: u32) { self.layout.height = Some(h); }
+    /// Largeur maximale du groupe, en pixels.
+    pub fn max_width(&mut self, mw: u32) { self.layout.max_width = Some(mw); }
+    /// Hauteur maximale du groupe, en pixels.
+    pub fn max_height(&mut self, mh: u32) { self.layout.max_height = Some(mh); }
     /// Proportion du groupe dans la colonne/racine (comme `scale` de Gradio).
     pub fn scale(&mut self, s: u32) { self.layout.scale = Some(s); }
     /// Largeur minimale du groupe, en pixels.
@@ -280,7 +286,14 @@ impl App {
             enable_docs: true,
             isolated_sessions: true,
             theme: Theme::default(),
+            max_width: None,
         }
+    }
+
+    /// Définit la largeur maximale de l'application (ex: 1200 pour un container centré à 1200px).
+    pub fn max_width(mut self, mw: u32) -> Self {
+        self.max_width = Some(mw);
+        self
     }
 
     /// Personnalise le thème visuel (Dark, Light, couleurs, arrondis, police).
