@@ -986,18 +986,17 @@ impl App {
 fn open_native_window(url: &str) {
     #[cfg(target_os = "windows")]
     {
-        // Tente d'ouvrir en mode fenêtre standalone Edge/Chrome sans barre d'adresse
-        let app_flag = format!("--app={url}");
-        if std::process::Command::new("msedge")
-            .arg(&app_flag)
+        // Tente d'ouvrir en vraie fenêtre applicative autonome (Frameless App Window)
+        let ps_cmd = format!(
+            "if (Get-Command msedge -ErrorAction SilentlyContinue) {{ Start-Process msedge -ArgumentList '--app={url}', '--window-size=1050,800' }} elseif (Get-Command chrome -ErrorAction SilentlyContinue) {{ Start-Process chrome -ArgumentList '--app={url}', '--window-size=1050,800' }} else {{ Start-Process '{url}' }}"
+        );
+
+        if std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &ps_cmd])
             .spawn()
             .is_err()
-            && std::process::Command::new("cmd")
-                .args(["/C", "start", url])
-                .spawn()
-                .is_err()
         {
-            eprintln!("[grio::desktop] Could not launch browser automatically for {url}");
+            let _ = std::process::Command::new("explorer").arg(url).spawn();
         }
     }
 
