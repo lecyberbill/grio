@@ -42,7 +42,7 @@
               └─────────────────────────────┘
 ```
 
-> 📖 **Full Component Reference**: See [COMPONENTS.md](COMPONENTS.md) for detailed APIs, parameters, and code examples for all 30+ built-in widgets.
+> 📖 **Full Component Reference**: See [COMPONENTS.md](COMPONENTS.md) for detailed APIs, parameters, and code examples for all 35+ built-in widgets.
 
 ---
 
@@ -91,11 +91,13 @@ cargo run -p grio --example greet
 
 | Example | Command | Highlights |
 |---|---|---|
-| **All-in-One Showcase** | `cargo run -p grio --example showcase` *(or `grio showcase`)* | **1-line demo of all 30+ components** in tabs: Controls, Vision, Data, Chat & Benchmarks |
+| **Flagship: IT Service Desk** | `cargo run -p grio --example it_desk` | **Production-grade Enterprise Support App** connected to **LM Studio** local LLM, interactive Service Catalog (`DataEditor`), Rich incident reports (`RichText`), RAG citations (`Pdf`), realtime hot-slots (`DynamicContainer`), and user telemetry (`Drawer`). |
+| **All-in-One Showcase** | `cargo run -p grio --example showcase` *(or `grio showcase`)* | **1-line gallery of all 35+ components** in 6 tabs: Forms, Media, Data, DAG Workflows, AI Chat & Dynamic Slots, System Telemetry. |
 | **Multimodal AI Studio** | `cargo run -p grio --example prompt_to_image` | Autoregressive LLM (Candle Qwen 2.5 7B GGUF) + SDXL Image Diffusion + Live Analytics Dataframe & Plots |
+| **Rich Data & Dynamic Slots** | `cargo run -p grio --example rich_data_slots` | Micro-editor Markdown (`RichText`), interactive grid with typed checkboxes (`DataEditor`), and runtime hot-slot injection (`DynamicContainer`). |
+| **Multi-Page & Drawer** | `cargo run -p grio --example multi_page_drawer` | Declarative SPA multi-page navigation (`app.page`) + Sliding offcanvas drawer. |
 | **Chatbot** | `cargo run -p grio --example chatbot` | Conversational Chatbot widget with token-by-token streaming |
-| **Media & Vision** | `cargo run -p grio --example media` | Image, Audio (live mic streaming), Video (live camera streaming) |
-| **Rich Forms & Controls** | `cargo run -p grio --example forms` | Sliders, Checkboxes, Dropdowns, Date/TimePickers, Dataframes, Plots, Code Editors, ImageEditor, plus Phase 7 utilities (Number, Label, JSON, Timer, File, DownloadButton) |
+| **Media & Vision** | `cargo run -p grio --example media` | Image, Audio (live mic streaming), Video (live camera streaming), PDF Viewer |
 | **Grid & Containers** | `cargo run -p grio --example grid` | Responsive Grids, Rows, Columns, Panels, and Accordions |
 | **Theming & Tabs** | `cargo run -p grio --example theme_and_tabs` | Multi-tab workflows, light/dark themes, brand accent customization |
 
@@ -114,12 +116,28 @@ d:\Projet\UI
    │  ├─ src/
    │  │  ├─ lib.rs            Public API exports & crate documentation
    │  │  ├─ app.rs            App builder & event distribution engine
-   │  │  ├─ components.rs     25+ Component implementations & traits
-   │  │  ├─ context.rs        Handler Context API (get, set, append, alert, progress)
+   │  │  ├─ components/       Modular Rust Component implementations
+   │  │  │  ├─ mod.rs         Core traits, WithLayout, and component re-exports
+   │  │  │  ├─ layout.rs      Row, Column, Panel, Grid, Tabs, Accordion, Drawer, DynamicContainer
+   │  │  │  ├─ forms.rs       Text, Number, Slider, Checkbox, Dropdown, Radio, RichText, File...
+   │  │  │  ├─ media.rs       Image, AnnotatedImage, ImageComparison, Audio, Video, Pdf, Model3D
+   │  │  │  ├─ data.rs        Dataframe, DataEditor, Code, Json, HighlightedText, CodeDiff, Map
+   │  │  │  └─ special.rs     Chatbot, Metric, Plot, Progress, NodeGraph, Timer, DownloadButton
+   │  │  ├─ context.rs        Handler Context API (get, set, append, append_component, alert, progress)
    │  │  ├─ events.rs         WireEvent & EventName model
    │  │  ├─ server.rs         Axum HTTP/WebSocket/REST server & OpenAPI engine
-   │  │  └─ assets/           Embedded styles.css (CSS3) & app.js (Vanilla ES6)
-   │  └─ examples/            Showcase examples (prompt_to_image, chatbot, greet...)
+   │  │  ├─ showcase.rs       Native All-in-One interactive showcase generator
+   │  │  └─ assets/           Embedded Zero-NodeJS Web Engine
+   │  │     ├─ styles.css     Unified CSS3 design system (Variables, Themes, Glassmorphism)
+   │  │     └─ js/            Modular Vanilla JavaScript frontend
+   │  │        ├─ core.js     App bootstrap, WebSocket client, event delegation, slots
+   │  │        ├─ forms.js    Standard inputs & RichText Markdown editor
+   │  │        ├─ data.js     Dataframe, DataEditor (TSV/CSV paste), Code & JSON editors
+   │  │        ├─ media.js    Media players, Inpainting Canvas, Pdf Document Viewer
+   │  │        ├─ special.js  Chatbot streaming, NodeGraph DAG workflow editor, OpenStreetMap
+   │  │        ├─ router.js   MultiPage SPA client router & History API
+   │  │        └─ i18n.js     Multi-language translation engine
+   │  └─ examples/            Showcase examples (it_desk, prompt_to_image, rich_data_slots...)
    └─ grio-cli                Standalone developer CLI tool
 ```
 
@@ -132,12 +150,14 @@ d:\Projet\UI
 | Component | Kind | Role | Description | Key Builder Methods |
 |---|---|---|---|---|
 | `Text` | `text` | Input | Single-line or multi-line text input | `.label()`, `.value()`, `.placeholder()`, `.lines()`, `.interactive()` |
+| `RichText` | `richtext` | Input | Markdown micro-editor with formatting toolbar & live preview | `.label()`, `.value()`, `.placeholder()`, `.lines()`, `.preview()` |
 | `Number` | `number` | Input | Numeric field with min/max/step & ± stepper | `.label()`, `.value()`, `.min()`, `.max()`, `.step()`, `.unit()` |
 | `Slider` | `slider` | Input | Numeric range slider | `.label()`, `.min()`, `.max()`, `.step()`, `.value()`, `.unit()` |
 | `SliderRange` | `sliderrange` | Input | Dual-thumb bounded range selector `[min, max]` | `.label()`, `.min()`, `.max()`, `.step()`, `.value(low, high)` |
 | `Radio` | `radio` | Input | Mutually exclusive selector (segmented pills or classic) | `.choices()`, `.style("pills"|"radio")`, `.direction()` |
 | `Checkbox` | `checkbox` | Input | Boolean toggle checkbox | `.label()`, `.value()`, `.interactive()` |
 | `Dropdown` | `dropdown` | Input | Select box (single, multiple, searchable) | `.choices()`, `.multiple()`, `.allow_custom()`, `.value()` |
+| `DataEditor` | `dataeditor` | In/Out | Interactive data grid with typed columns, checkboxes & CSV copy-paste | `.column()`, `.data()`, `.allow_add()`, `.allow_delete()`, `.allow_paste()` |
 | `DatePicker` / `TimePicker` | `date` / `time` | Input | Native ISO date (`yyyy-mm-dd`) & time pickers | `.label()`, `.min()`, `.max()`, `.value()` |
 | `ColorPicker` | `colorpicker` | Input | Palette selector with hex code & quick swatches | `.label()`, `.value()`, `.presets()` |
 | `SortableList` | `list` | Input | Drag & drop reorderable items list | `.label()`, `.items()`, `.value()` |
@@ -145,6 +165,8 @@ d:\Projet\UI
 | `Explorer` | `explorer` | Input | Server-side directory and file browser | `.root()`, `.pattern()` |
 | `AudioRecorder` | `audiorecorder` | Input | Live microphone recorder with animated pulse & timer | `.label()`, `.max_duration()`, `.interactive()` |
 | `Chatbot` | `chatbot` | Output | Interactive conversation thread with token streaming | `.messages()`, `.placeholder()`, `.height()` |
+| `Pdf` | `pdf` | Output | In-app document & PDF viewer with page navigation & RAG highlights | `.src()`, `.page()`, `.zoom()`, `.highlight()` |
+| `NodeGraph` | `nodegraph` | In/Out | ComfyUI-style visual workflow DAG editor with bezier connectors | `.node()`, `.edge()`, `.height()` |
 | `Output` | `output` | Output | Standard rendered text or JSON output | `.label()`, `.value()` |
 | `Markdown` | `markdown` | Output | GitHub-flavored markdown renderer | `.text()`, `.value()` |
 | `Metric` | `metric` | Output | Analytics KPI card with value & delta badge | `.label()`, `.value()`, `.delta()`, `.delta_color()`, `.unit()` |
@@ -155,6 +177,7 @@ d:\Projet\UI
 | `HighlightedText` | `highlightedtext` | Output | NLP/NER text with labeled spans and color legend | `.segments()`, `.color_map()`, `.show_legend()` |
 | `CodeDiff` | `codediff` | Output | AI code refactoring diff with `+`/`-` line indicators | `.old_code()`, `.new_code()`, `.language()` |
 | `Model3D` | `model3d` | Output | Lightweight WebGL 3D viewer (Wavefront OBJ, orbit/zoom) | `.value()`, `.clear_color()`, `.interactive()` |
+| `Map` | `map` | In/Out | Interactive OpenStreetMap with markers, radius circles, and clicks | `.center()`, `.zoom()`, `.marker()`, `.circle()` |
 | `Dataframe` | `dataframe` | In/Out | Interactive editable & sortable spreadsheet | `.headers()`, `.data()`, `.sortable()`, `.addable()`, `.interactive()` |
 | `Gallery` | `gallery` | In/Out | Media visualizer with lightbox popup | `.label()`, `.columns()`, `.upload()`, `.interactive()` |
 | `ImageEditor` | `imageeditor` | In/Out | Full canvas editor (draw, inpainting mask, crop, filters) | `.brush()`, `.crop()`, `.filters()`, `.layers()` |
@@ -167,6 +190,9 @@ d:\Projet\UI
 
 ### Containers & Layouts
 
+- **`DynamicContainer`** (`DynamicContainer::new("slot_id")`): Server-driven runtime component injection, replacement, or clearing via WebSockets (`ctx.append_component`, `ctx.replace_children`, `ctx.clear_container`).
+- **`Drawer`** (`Drawer::new("drawer_id")`): Slide-in side drawer panel (`left`, `right`, `top`, `bottom`) with backdrop blur for telemetry, settings, and inspector panels.
+- **`MultiPage`** (`app.page("/route", "Title", |p| ...)`): Declarative multi-page routing with automatic responsive sidebar.
 - **`Row`** (`b.row(|r| ...)`): Horizontal flexbox layout.
 - **`Column`** (`b.column(|c| ...)`): Vertical stacking layout.
 - **`Panel`** (`b.panel("Title", |p| ...)`): Card container with embossed border and header.
@@ -196,6 +222,10 @@ App::new("Demo")
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
 
+        // Dynamically inject a new widget at runtime
+        let new_box = Output::new("dyn_metric").label("Result").value("Completed");
+        ctx.append_component("result_slot", new_box);
+
         // Update progress bar
         ctx.progress("progress_bar", 1.0, "Done!");
 
@@ -211,6 +241,10 @@ App::new("Demo")
 - **`ctx.get::<T>("id")` / `ctx.get_str("id")` / `ctx.get_f64("id")`**: Read deserialized input state.
 - **`ctx.set("id", value)`**: Update component value across all connected clients and API response.
 - **`ctx.append("id", text)`**: Stream incremental text/tokens directly to a component in real-time.
+- **`ctx.append_component("slot_id", component)`**: Inject a new live component into a `DynamicContainer` at runtime.
+- **`ctx.replace_children("slot_id", vec)`**: Replace all children inside a `DynamicContainer`.
+- **`ctx.clear_container("slot_id")`**: Empty a `DynamicContainer`.
+- **`ctx.set_visible("id", bool)`**: Dynamically show or hide any component without losing state.
 - **`ctx.progress("id", pct, "step")`**: Drive visual progress bars (`0.0` to `1.0`).
 - **`ctx.alert(AlertLevel::Success, "msg")`**: Display color-coded toast notifications (`Info`, `Success`, `Warn`, `Error`).
 - **`ctx.cancelled()`**: Check if the user cancelled or re-triggered the current job.
