@@ -957,6 +957,12 @@ impl App {
         }
     }
 
+    /// **Export HTML Autonome Statique** : Génère un document HTML 100% autonome
+    /// avec tous les styles CSS et les scripts JS inlinés (0 dépendance).
+    pub fn render_html_bundle(&self) -> String {
+        crate::server::render_standalone_html(self)
+    }
+
     /// **Mode Desktop Standalone** : Démarre le serveur et ouvre automatiquement
     /// l'application dans une fenêtre native dédiée (Frameless App Window).
     pub fn launch_desktop(self, addr: impl Into<String>) -> Result<()> {

@@ -1165,6 +1165,19 @@ fn render_page(app: &App) -> String {
     )
 }
 
+/// Génère le HTML autonome complet avec styles et JS inlinés pour un Space statique.
+pub(crate) fn render_standalone_html(app: &App) -> String {
+    let raw = render_page(app);
+    let with_css = raw.replace(
+        r#"<link rel="stylesheet" href="/assets/styles.css">"#,
+        &format!("<style>\n{STYLES}\n</style>")
+    );
+    with_css.replace(
+        r#"<script src="/assets/app.js"></script>"#,
+        &format!("<script>\n{APP_JS}\n</script>")
+    )
+}
+
 /// Props du composant **avec** le réglage de mise en page fusionné
 /// (`prop.layout` omis s'il est vide).
 fn merge_props(c: &dyn Component) -> Value {
