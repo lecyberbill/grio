@@ -189,7 +189,7 @@ impl App {
                         .label("Interactive PDF Document Viewer (with RAG/OCR Highlights)")
                         .src("https://raw.githubusercontent.com/mozilla/pdf.js/master/examples/learning/helloworld.pdf")
                         .page(1)
-                        .highlight(1, 0.15, 0.25, 0.7, 0.1, "Extracted Title", "#6366f1"));
+                        .highlight(1, 0.05, 0.14, 0.90, 0.07, "Extracted Title", "#6366f1"));
                     b.item(ImageComparison::new("sc_comp")
                         .label("Before / After Comparison (ImageComparison)")
                         .before("https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=300", "Low Resolution (Original)")

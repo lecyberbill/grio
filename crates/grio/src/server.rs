@@ -1170,11 +1170,11 @@ pub(crate) fn render_standalone_html(app: &App) -> String {
     let raw = render_page(app);
     let with_css = raw.replace(
         r#"<link rel="stylesheet" href="/assets/styles.css">"#,
-        &format!("<style>\n{STYLES}\n</style>")
+        &format!("<style>\n{STYLES}\n</style>"),
     );
     with_css.replace(
         r#"<script src="/assets/app.js"></script>"#,
-        &format!("<script>\n{APP_JS}\n</script>")
+        &format!("<script>\n{APP_JS}\n</script>"),
     )
 }
 
