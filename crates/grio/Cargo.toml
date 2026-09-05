@@ -29,3 +29,4 @@ tokenizers = { version = "0.21", default-features = false, features = ["fancy-re
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 byteorder = "1.5"
 bytes = "1"
+tokio-tungstenite = "0.26"

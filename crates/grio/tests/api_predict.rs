@@ -1102,3 +1102,134 @@ async fn test_phase15_chromatix_visual_passkey_auth() {
     let tampered_verify = auth_mgr.verify_chromatix_badge(&tampered_png, master_key);
     assert!(tampered_verify.is_err(), "Tampered image must be rejected");
 }
+
+#[tokio::test]
+async fn test_server_security_headers_and_path_traversal() {
+    let app = App::new("Security Test App")
+        .item(Text::new("input_txt").value("safe_test"))
+        .item(Output::new("out_txt"));
+
+    let port = 17887;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+    tokio::time::sleep(Duration::from_millis(400)).await;
+
+    // 1. Vérification des Security Headers HTTP
+    let client = reqwest::Client::new();
+    let resp = client.get(format!("http://127.0.0.1:{port}/")).send().await.expect("connect");
+    let headers = resp.headers();
+
+    assert_eq!(
+        headers.get("x-content-type-options").and_then(|v| v.to_str().ok()),
+        Some("nosniff"),
+        "Security header X-Content-Type-Options must be nosniff"
+    );
+    assert_eq!(
+        headers.get("x-frame-options").and_then(|v| v.to_str().ok()),
+        Some("SAMEORIGIN"),
+        "Security header X-Frame-Options must be SAMEORIGIN"
+    );
+    assert_eq!(
+        headers.get("referrer-policy").and_then(|v| v.to_str().ok()),
+        Some("strict-origin-when-cross-origin"),
+        "Security header Referrer-Policy must be strict-origin-when-cross-origin"
+    );
+
+    // 2. Vérification contre le Path Traversal sur /api/explore
+    let evil_explore = client
+        .get(format!("http://127.0.0.1:{port}/api/explore?path=../../../../Windows/System32"))
+        .send()
+        .await
+        .expect("explore connect")
+        .text()
+        .await
+        .expect("body");
+
+    assert!(
+        evil_explore.contains("chemin hors de la racine") || evil_explore.contains("error"),
+        "Path traversal attempt must be blocked: {evil_explore}"
+    );
+}
+
+#[tokio::test]
+async fn test_frontend_websocket_and_dom_interaction() {
+    let app = App::new("Front-End Automation Test")
+        .item(Text::new("user_msg").label("Message").value("Initial Value"))
+        .item(Button::new("btn_greet").label("Saluer").primary())
+        .item(Output::new("out_greet").label("Réponse"))
+        .on_click("btn_greet", |ctx| {
+            let msg: String = ctx.get("user_msg").unwrap_or_default();
+            ctx.set("out_greet", format!("Echo from Rust: {msg}"));
+            Ok(())
+        });
+
+    let port = 17889;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+    tokio::time::sleep(Duration::from_millis(400)).await;
+
+    // 1. Validation du rendu HTML et des scripts JS
+    let client = reqwest::Client::new();
+    let index_html = client.get(format!("http://127.0.0.1:{port}/")).send().await.unwrap().text().await.unwrap();
+    assert!(index_html.contains("Front-End Automation Test"));
+    assert!(index_html.contains(r#"data-id="user_msg""#));
+    assert!(index_html.contains(r#"data-id="btn_greet""#));
+    assert!(index_html.contains(r#"data-id="out_greet""#));
+    assert!(index_html.contains(r#"src="/assets/app.js""#));
+
+    let app_js = client.get(format!("http://127.0.0.1:{port}/assets/app.js")).send().await.unwrap().text().await.unwrap();
+    assert!(app_js.contains("window.grio"), "Frontend bundle must export window.grio");
+    assert!(app_js.contains("inputsSnapshot"), "Frontend bundle must implement inputsSnapshot");
+
+    // 2. Connexion WebSocket simulant le client web front-end
+    use tokio_tungstenite::connect_async;
+    use tokio_tungstenite::tungstenite::Message as TungMessage;
+    use futures::{SinkExt, StreamExt};
+
+    let ws_url = format!("ws://127.0.0.1:{port}/ws");
+    let (mut ws_stream, _) = connect_async(ws_url).await.expect("Failed to connect front-end WS");
+
+    // 3. Simulation d'un événement utilisateur 'click' depuis le front-end
+    let client_event = serde_json::json!({
+        "t": "event",
+        "c": "btn_greet",
+        "e": "click",
+        "d": null,
+        "v": {
+            "user_msg": "Super Nova Automated Test"
+        }
+    });
+
+    ws_stream.send(TungMessage::Text(client_event.to_string().into())).await.expect("send event");
+
+    // 4. Réception du message de mise à jour WebSocket poussé par le serveur
+    let mut received_update = false;
+    let timeout = tokio::time::sleep(Duration::from_secs(3));
+    tokio::pin!(timeout);
+
+    loop {
+        tokio::select! {
+            Some(Ok(msg)) = ws_stream.next() => {
+                if let TungMessage::Text(txt) = msg {
+                    if txt.contains("Echo from Rust: Super Nova Automated Test") {
+                        received_update = true;
+                        break;
+                    }
+                }
+            }
+            _ = &mut timeout => {
+                break;
+            }
+        }
+    }
+
+    assert!(received_update, "Front-end WebSocket must receive the calculated reactive output update");
+}

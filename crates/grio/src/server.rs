@@ -136,6 +136,9 @@ pub async fn serve(app: App, addr: String) -> Result<()> {
         }
     }
 
+    // Couche de sécurité HTTP standard (défense en profondeur)
+    router = router.layer(axum::middleware::from_fn(security_headers_middleware));
+
     if server.app.allow_cors {
         router = router.layer(axum::middleware::from_fn(cors_middleware));
     }
@@ -203,6 +206,35 @@ pub async fn serve(app: App, addr: String) -> Result<()> {
 
     axum::serve(listener, router).await?;
     Ok(())
+}
+
+async fn security_headers_middleware(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> impl IntoResponse {
+    let mut response = next.run(request).await;
+    let headers = response.headers_mut();
+    // Défense contre le MIME-sniffing
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        header::HeaderValue::from_static("nosniff"),
+    );
+    // Protection contre le clickjacking
+    headers.insert(
+        header::X_FRAME_OPTIONS,
+        header::HeaderValue::from_static("SAMEORIGIN"),
+    );
+    // Filtrage XSS navigateur
+    headers.insert(
+        header::HeaderName::from_static("x-xss-protection"),
+        header::HeaderValue::from_static("1; mode=block"),
+    );
+    // Protection referrer
+    headers.insert(
+        header::REFERRER_POLICY,
+        header::HeaderValue::from_static("strict-origin-when-cross-origin"),
+    );
+    response
 }
 
 async fn cors_middleware(
@@ -674,6 +706,26 @@ async fn predict(
         }
     }
 
+    // Vérification de rôle RBAC si l'authentification est activée avec default_required_role
+    if server.app.auth_config.enabled {
+        if let Some(ref required_role) = server.app.auth_config.default_required_role {
+            let user = get_request_user(&server, &headers);
+            let has_role = user.as_ref().map(|u| u.has_role(required_role)).unwrap_or(false);
+            if !has_role {
+                vlog(
+                    &server.app,
+                    "[api]",
+                    &format!("accès refusé (rôle `{required_role}` requis)"),
+                );
+                return (
+                    axum::http::StatusCode::FORBIDDEN,
+                    Json(json!({ "ok": false, "error": format!("Forbidden — Role `{required_role}` required") })),
+                )
+                    .into_response();
+            }
+        }
+    }
+
     let io = collect_io(&server.app);
     let mut inputs: HashMap<String, Value> = HashMap::new();
 
@@ -899,14 +951,17 @@ struct IoParts {
 
 async fn ws_upgrade(
     ws: WebSocketUpgrade,
+    headers: axum::http::HeaderMap,
     State(server): State<Arc<AppServer>>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| socket_loop(socket, server))
+    let auth_token = get_session_token(&headers, &server.app.auth_config.session_cookie_name);
+    ws.on_upgrade(move |socket| socket_loop(socket, server, auth_token))
 }
 
-async fn socket_loop(socket: WebSocket, server: Arc<AppServer>) {
+async fn socket_loop(socket: WebSocket, server: Arc<AppServer>, auth_token: Option<String>) {
     let client_id = server.clients.fetch_add(1, Ordering::SeqCst) + 1;
-    let session_id = format!("sess_{client_id}");
+    // Si un token d'authentification existe, la session WebSocket est liée à ce token
+    let session_id = auth_token.unwrap_or_else(|| format!("sess_{client_id}"));
     vlog(
         &server.app,
         "[ws]",
