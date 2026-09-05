@@ -68,6 +68,7 @@ pub struct Context {
     all: Vec<(String, Value)>,
     emitted: Vec<(String, Value)>,
     wasm: Arc<crate::wasm::WasmRegistry>,
+    user: Option<crate::auth::UserProfile>,
 }
 
 impl Context {
@@ -88,11 +89,17 @@ impl Context {
             all: Vec::new(),
             emitted: Vec::new(),
             wasm: Arc::new(crate::wasm::WasmRegistry::new()),
+            user: None,
         }
     }
 
     pub(crate) fn with_wasm(mut self, wasm: Arc<crate::wasm::WasmRegistry>) -> Self {
         self.wasm = wasm;
+        self
+    }
+
+    pub(crate) fn with_user(mut self, user: Option<crate::auth::UserProfile>) -> Self {
+        self.user = user;
         self
     }
 
@@ -300,7 +307,7 @@ impl Context {
         let bytes: &[u8] = unsafe {
             std::slice::from_raw_parts(
                 points.as_ptr() as *const u8,
-                points.len() * std::mem::size_of::<f32>(),
+                std::mem::size_of_val(points),
             )
         };
         self.append_binary(id, bytes);
@@ -317,7 +324,7 @@ impl Context {
         let bytes: &[u8] = unsafe {
             std::slice::from_raw_parts(
                 points.as_ptr() as *const u8,
-                points.len() * std::mem::size_of::<f32>(),
+                std::mem::size_of_val(points),
             )
         };
         let b64 = crate::media::encode(bytes);
@@ -401,6 +408,26 @@ impl Context {
             Error::from(format!("plugin WebAssembly `{plugin_id}` introuvable dans le registre"))
         })?;
         plugin.invoke_bytes(method, input)
+    }
+
+    /// **Profil utilisateur authentifié** : renvoie les informations de l'utilisateur
+    /// connecté (si l'authentification est activée sur l'application).
+    pub fn user(&self) -> Option<&crate::auth::UserProfile> {
+        self.user.as_ref()
+    }
+
+    /// **Identifiant de l'utilisateur courant** : raccourci pour `ctx.user().map(|u| u.id.as_str())`.
+    pub fn user_id(&self) -> Option<&str> {
+        self.user.as_ref().map(|u| u.id.as_str())
+    }
+
+    /// **Vérification RBAC** : renvoie `true` si l'utilisateur possède le rôle spécifié.
+    /// Renvoie `true` si l'authentification est désactivée.
+    pub fn has_role(&self, role: &str) -> bool {
+        match &self.user {
+            Some(u) => u.has_role(role),
+            None => true, // Si pas d'authentification activée, accès accordé par défaut
+        }
     }
 
     /// `true` si le job courant a été annulé (nouveau déclenchement sur la

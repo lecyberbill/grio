@@ -99,6 +99,7 @@ cargo run -p grio --example greet
 | **Chatbot** | `cargo run -p grio --example chatbot` | Conversational Chatbot widget with token-by-token streaming |
 | **Big Data & WebGL GPU Accelerator** | `cargo run -p grio --example bigdata_accelerator` | Zero-copy binary streaming (`Float32Array`), 1M+ points at 60 FPS (`WebGlPlot`), and multidimensional OLAP pivot tables (`PivotTable`). |
 | **Model Context Protocol (MCP) Server** | `cargo run -p grio --example mcp_agent_server` | Official Anthropic MCP v2024-11-05 endpoint (`/mcp/v1`) for Claude Desktop, Cursor & Windsurf tool-calling. |
+| **Enterprise SSO & RBAC** | `cargo run -p grio --example enterprise_sso` | Turnkey Single Sign-On (GitHub, Google, Keycloak, OIDC, Mock dev profiles), role-based access control, session cookies, and route protection (`.require_role()`). |
 | **Media & Vision** | `cargo run -p grio --example media` | Image, Audio (live mic streaming), Video (live camera streaming), PDF Viewer |
 | **Grid & Containers** | `cargo run -p grio --example grid` | Responsive Grids, Rows, Columns, Panels, and Accordions |
 | **Theming & Tabs** | `cargo run -p grio --example theme_and_tabs` | Multi-tab workflows, light/dark themes, brand accent customization |
@@ -119,6 +120,7 @@ d:\Projet\UI
    │  ├─ src/
    │  │  ├─ lib.rs            Public API exports & crate documentation
    │  │  ├─ app.rs            App builder & event distribution engine
+   │  │  ├─ auth.rs           Enterprise Auth & RBAC (OIDC, OAuth2, SSO, session store)
    │  │  ├─ ai.rs             Multi-engine LLM connectors (LM Studio, Ollama, OpenAI)
    │  │  ├─ mcp.rs            Official Model Context Protocol (MCP v2024-11-05) Server
    │  │  ├─ wasm.rs           Sandboxed WebAssembly Plugin Engine & Extensible ABI
@@ -129,7 +131,7 @@ d:\Projet\UI
    │  │  │  ├─ media.rs       Image, AnnotatedImage, ImageComparison, Audio, Video, Pdf, Model3D
    │  │  │  ├─ data.rs        Dataframe, DataEditor, WebGlPlot, PivotTable, Code, Json, Map...
    │  │  │  └─ special.rs     Chatbot, Metric, Plot, Progress, NodeGraph, Timer, DownloadButton
-   │  │  ├─ context.rs        Handler Context API (get, set, append, append_f32_points, call_wasm)
+   │  │  ├─ context.rs        Handler Context API (get, set, append, append_f32_points, call_wasm, user)
    │  │  ├─ events.rs         WireEvent & EventName model
    │  │  ├─ server.rs         Axum HTTP/WebSocket/REST server & OpenAPI engine
    │  │  ├─ showcase.rs       Native All-in-One interactive showcase generator
@@ -141,9 +143,9 @@ d:\Projet\UI
    │  │        ├─ data.js     Dataframe, DataEditor, WebGL2 GPU Engine, OLAP PivotTable
    │  │        ├─ media.js    Media players, Inpainting Canvas, Pdf Document Viewer
    │  │        ├─ special.js  Chatbot streaming, NodeGraph DAG workflow editor, OpenStreetMap
-   │  │        ├─ router.js   MultiPage SPA client router & History API
+   │  │        ├─ router.js   MultiPage SPA client router, Auth header & History API
    │  │        └─ i18n.js     Multi-language translation engine
-   │  └─ examples/            Showcase examples (it_desk, agent_hub, bigdata_accelerator, wasm_plugins...)
+   │  └─ examples/            Showcase examples (it_desk, enterprise_sso, agent_hub, bigdata_accelerator, wasm_plugins...)
    └─ grio-cli                Standalone developer CLI tool
 ```
 

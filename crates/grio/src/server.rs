@@ -70,6 +70,8 @@ pub struct AppServer {
     /// Job en cours d'exécution (pour l'annulation sur re-déclenchement).
     current: Mutex<Option<(String, String, Arc<AtomicBool>)>>,
     clients: AtomicUsize,
+    /// Gestionnaire d'authentification et de contrôle d'accès RBAC (optionnel).
+    pub auth_manager: Arc<crate::auth::AuthManager>,
 }
 
 /// Événement en attente d'exécution dans la file.
@@ -86,6 +88,8 @@ pub async fn serve(app: App, addr: String) -> Result<()> {
     let (push_tx, push_rx) = mpsc::unbounded_channel::<(Option<String>, Value)>();
     let (job_tx, job_rx) = mpsc::unbounded_channel::<Job>();
 
+    let auth_manager = Arc::new(crate::auth::AuthManager::new(app.auth_config.clone()));
+
     let server = Arc::new(AppServer {
         app: Arc::new(app),
         values: Arc::new(Mutex::new(HashMap::new())),
@@ -95,6 +99,7 @@ pub async fn serve(app: App, addr: String) -> Result<()> {
         job_tx,
         current: Mutex::new(None),
         clients: AtomicUsize::new(0),
+        auth_manager,
     });
 
     tokio::spawn(forwarder(push_rx, tx));
@@ -110,6 +115,13 @@ pub async fn serve(app: App, addr: String) -> Result<()> {
         .route("/api/openapi.json", get(openapi_spec))
         .route("/docs", get(docs_page))
         .route("/api/explore", get(explore));
+
+    if server.app.auth_config.enabled {
+        router = router
+            .route("/auth/user", get(auth_user_endpoint))
+            .route("/auth/logout", post(auth_logout_endpoint))
+            .route("/auth/login", get(auth_login_page).post(auth_login_submit));
+    }
 
     if server.app.enable_mcp {
         router = router
@@ -297,8 +309,11 @@ async fn dispatcher(server: Arc<AppServer>, mut rx: mpsc::UnboundedReceiver<Job>
             }
         });
 
+        let auth_mgr = Arc::clone(&server.auth_manager);
+        let user_profile = sess_id.as_deref().and_then(|token| auth_mgr.get_user(token));
+
         let out = tokio::task::spawn_blocking(move || {
-            run_event(&wire, &app, &session_values, &chan_tx, job_cancel)
+            run_event(&wire, &app, &session_values, &chan_tx, job_cancel, user_profile)
         })
         .await
         .unwrap_or_else(|_| json!({ "t": "error", "m": "tâche interrompue" }));
@@ -330,6 +345,7 @@ fn run_event(
     values: &Mutex<HashMap<String, Value>>,
     push: &mpsc::UnboundedSender<Value>,
     cancel: Arc<AtomicBool>,
+    user: Option<crate::auth::UserProfile>,
 ) -> Value {
     let mut inputs = match values.lock() {
         Ok(v) => v.clone(),
@@ -345,7 +361,8 @@ fn run_event(
         cancel,
         Some(wire.clone()),
     )
-    .with_wasm(Arc::clone(&app.wasm_registry));
+    .with_wasm(Arc::clone(&app.wasm_registry))
+    .with_user(user);
     let out = process_event(wire, app, &mut ctx);
 
     // Fusionne les nouvelles valeurs dans l'état partagé.
@@ -716,7 +733,8 @@ async fn predict(
     );
 
     let (fin_tx, fin_rx) = oneshot::channel();
-    server.enqueue(None, wire, Some(fin_tx));
+    let sess_token = get_session_token(&headers, &server.app.auth_config.session_cookie_name);
+    server.enqueue(sess_token, wire, Some(fin_tx));
 
     let out = match fin_rx.await {
         Ok(o) => o,
@@ -1065,6 +1083,19 @@ fn render_page(app: &App) -> String {
     if let Some(ref f) = app.theme.font {
         theme_css_vars.push(format!("--mg-font-family: {f}; --mg-font: {f};"));
     }
+    let auth_header_html = if app.auth_config.enabled {
+        r#"<div id="mg-auth-header" class="mg-auth-header">
+            <a href="/auth/login" id="mg-login-btn" class="mg-auth-login-link">Sign in</a>
+            <div id="mg-user-pill" class="mg-user-pill" hidden>
+                <img id="mg-user-avatar" class="mg-user-avatar" src="" alt="Avatar" />
+                <span id="mg-user-name" class="mg-user-name">User</span>
+                <span id="mg-user-role" class="mg-user-role"></span>
+                <button id="mg-logout-btn" class="mg-logout-btn" type="button" title="Sign out">🚪</button>
+            </div>
+        </div>"#
+    } else {
+        ""
+    };
     let theme_style = if theme_css_vars.is_empty() {
         String::new()
     } else {
@@ -1098,8 +1129,13 @@ fn render_page(app: &App) -> String {
         for (i, p) in app.pages.iter().enumerate() {
             let active = if i == 0 { " active" } else { "" };
             let icon_str = p.icon.as_deref().unwrap_or("📄");
+            let role_attr = if let Some(ref r) = p.required_role {
+                format!(" data-required-role=\"{r}\"")
+            } else {
+                String::new()
+            };
             sidebar_html.push_str(&format!(
-                r#"<a href="{}" class="mg-nav-item{active}" data-grio-route="{}" data-page-target="{}"><span class="mg-nav-icon">{}</span><span class="mg-nav-title">{}</span></a>"#,
+                r#"<a href="{}" class="mg-nav-item{active}" data-grio-route="{}" data-page-target="{}"{role_attr}><span class="mg-nav-icon">{}</span><span class="mg-nav-title">{}</span></a>"#,
                 esc_html(&p.route),
                 esc_html(&p.route),
                 esc_html(&p.id),
@@ -1114,8 +1150,13 @@ fn render_page(app: &App) -> String {
     if is_multipage {
         for (i, p) in app.pages.iter().enumerate() {
             let active = if i == 0 { " active" } else { "" };
+            let role_attr = if let Some(ref r) = p.required_role {
+                format!(" data-required-role=\"{r}\"")
+            } else {
+                String::new()
+            };
             body.push_str(&format!(
-                r#"<section class="mg-page-view{active}" id="{}" data-route="{}">"#,
+                r#"<section class="mg-page-view{active}" id="{}" data-route="{}"{role_attr}>"#,
                 esc_html(&p.id),
                 esc_html(&p.route)
             ));
@@ -1157,7 +1198,10 @@ fn render_page(app: &App) -> String {
         {sidebar_toggle}
         <h1 class="mg-title">{title}</h1>
       </div>
-      {toggle_html}
+      <div class="mg-header-right">
+        {auth_header_html}
+        {toggle_html}
+      </div>
     </div>
     {sub}
   </header>
@@ -1585,4 +1629,148 @@ async fn explore(Query(q): Query<ExploreQuery>) -> Json<Value> {
 /// Log simple hors application (routes hors `AppServer`).
 fn vlog_none(msg: &str) {
     eprintln!("\x1b[90m  [api]\x1b[0m {msg}");
+}
+
+/// `GET /auth/user` — Récupère le profil de l'utilisateur courant.
+async fn auth_user_endpoint(
+    State(server): State<Arc<AppServer>>,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
+    let user = get_request_user(&server, &headers);
+    if let Some(u) = user {
+        Json(json!({ "authenticated": true, "user": u }))
+    } else {
+        Json(json!({ "authenticated": false, "user": null }))
+    }
+}
+
+/// `POST /auth/logout` — Déconnecte l'utilisateur.
+async fn auth_logout_endpoint(
+    State(server): State<Arc<AppServer>>,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
+    if let Some(token) = get_session_token(&headers, &server.app.auth_config.session_cookie_name) {
+        server.auth_manager.destroy_session(&token);
+    }
+    let mut response = Json(json!({ "ok": true, "message": "logged out" })).into_response();
+    let cookie_val = format!("{}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax", server.app.auth_config.session_cookie_name);
+    if let Ok(hv) = header::HeaderValue::from_str(&cookie_val) {
+        response.headers_mut().insert(header::SET_COOKIE, hv);
+    }
+    response
+}
+
+/// `GET /auth/login` — Page de connexion SSO.
+async fn auth_login_page(State(server): State<Arc<AppServer>>) -> impl IntoResponse {
+    let title = esc_html(&server.app.title);
+    let mut providers_html = String::new();
+    for p in &server.app.auth_config.providers {
+        match p {
+            crate::auth::AuthProvider::GitHub { .. } => {
+                providers_html.push_str(r#"<a href="/auth/github" class="mg-auth-btn mg-auth-github">Sign in with GitHub</a>"#);
+            }
+            crate::auth::AuthProvider::Google { .. } => {
+                providers_html.push_str(r#"<a href="/auth/google" class="mg-auth-btn mg-auth-google">Sign in with Google</a>"#);
+            }
+            crate::auth::AuthProvider::Keycloak { .. } => {
+                providers_html.push_str(r#"<a href="/auth/keycloak" class="mg-auth-btn mg-auth-keycloak">Sign in with Enterprise Keycloak</a>"#);
+            }
+            crate::auth::AuthProvider::Mock { users } => {
+                for u in users {
+                    providers_html.push_str(&format!(
+                        r#"<form method="POST" action="/auth/login" style="margin-top:8px;">
+                            <input type="hidden" name="mock_user" value="{}">
+                            <button type="submit" class="mg-auth-btn mg-auth-mock">Sign in as <strong>{}</strong> ({})</button>
+                        </form>"#,
+                        esc_html(&u.username),
+                        esc_html(&u.username),
+                        u.roles.join(", ")
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in · {title}</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+  <style>
+    body {{ display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; background:var(--mg-bg); font-family:system-ui,sans-serif; }}
+    .mg-auth-card {{ background:var(--mg-surface); border:1px solid var(--mg-border); border-radius:12px; padding:32px; width:100%; max-width:400px; box-shadow:0 8px 30px rgba(0,0,0,0.2); text-align:center; }}
+    .mg-auth-btn {{ display:block; width:100%; box-sizing:border-box; padding:12px; margin:8px 0; border-radius:8px; text-decoration:none; font-weight:600; cursor:pointer; border:1px solid var(--mg-border); background:var(--mg-surface-2); color:var(--mg-text); }}
+    .mg-auth-btn:hover {{ background:var(--mg-primary); color:#fff; }}
+  </style>
+</head>
+<body>
+  <div class="mg-auth-card">
+    <h2>{title}</h2>
+    <p style="color:var(--mg-text-muted); margin-bottom:24px;">Enterprise Single Sign-On</p>
+    {providers_html}
+  </div>
+</body>
+</html>"#
+    );
+    Html(html)
+}
+
+/// `POST /auth/login` — Soumission de login mock.
+async fn auth_login_submit(
+    State(server): State<Arc<AppServer>>,
+    axum::extract::Form(form): axum::extract::Form<HashMap<String, String>>,
+) -> impl IntoResponse {
+    if let Some(mock_name) = form.get("mock_user") {
+        for p in &server.app.auth_config.providers {
+            if let crate::auth::AuthProvider::Mock { users } = p {
+                if let Some(user) = users.iter().find(|u| &u.username == mock_name) {
+                    let token = server.auth_manager.create_session(user.clone());
+                    let mut res = axum::response::Redirect::to("/").into_response();
+                    let cookie_val = format!(
+                        "{}={token}; Path=/; Max-Age={}; HttpOnly; SameSite=Lax",
+                        server.app.auth_config.session_cookie_name,
+                        server.app.auth_config.session_ttl_secs
+                    );
+                    if let Ok(hv) = header::HeaderValue::from_str(&cookie_val) {
+                        res.headers_mut().insert(header::SET_COOKIE, hv);
+                    }
+                    return res;
+                }
+            }
+        }
+    }
+    axum::response::Redirect::to("/auth/login").into_response()
+}
+
+fn get_request_user(server: &AppServer, headers: &axum::http::HeaderMap) -> Option<crate::auth::UserProfile> {
+    if !server.app.auth_config.enabled {
+        return None;
+    }
+    let token = get_session_token(headers, &server.app.auth_config.session_cookie_name)?;
+    server.auth_manager.get_user(&token)
+}
+
+fn get_session_token(headers: &axum::http::HeaderMap, cookie_name: &str) -> Option<String> {
+    // 1. Authorization: Bearer <token>
+    if let Some(auth) = headers.get("authorization").and_then(|v| v.to_str().ok()) {
+        if let Some(stripped) = auth.strip_prefix("Bearer ") {
+            return Some(stripped.to_string());
+        }
+    }
+    // 2. Cookie: grio_session=<token>
+    if let Some(cookie_str) = headers.get("cookie").and_then(|v| v.to_str().ok()) {
+        for cookie in cookie_str.split(';') {
+            let mut parts = cookie.trim().splitn(2, '=');
+            if let (Some(k), Some(v)) = (parts.next(), parts.next()) {
+                if k == cookie_name {
+                    return Some(v.to_string());
+                }
+            }
+        }
+    }
+    None
 }

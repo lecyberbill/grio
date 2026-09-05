@@ -488,6 +488,7 @@
     initPreferences();
     initApiModal();
     initMultiPage();
+    initAuth();
     document.querySelectorAll('[data-kind]').forEach(mount);
 
     document.addEventListener('keydown', (e) => {

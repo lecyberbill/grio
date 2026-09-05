@@ -30,6 +30,7 @@
 
 pub mod ai;
 pub mod app;
+pub mod auth;
 pub mod components;
 pub mod context;
 pub mod events;
@@ -41,6 +42,7 @@ pub mod wasm;
 
 pub use ai::{Llm, LlmProvider};
 pub use app::{App, PageBuilder, PageDef, Theme, ThemeMode};
+pub use auth::{AuthConfig, AuthManager, AuthProvider, UserProfile};
 pub use components::{
     Accordion, AnnotatedImage, Audio, AudioRecorder, BoundingBox, Button, ChatMessage, Chatbot,
     Checkbox, Code, CodeDiff, ColorPicker, Column, ColumnDef, ColumnType, Component, DataEditor,

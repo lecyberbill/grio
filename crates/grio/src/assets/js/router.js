@@ -98,9 +98,65 @@
       });
     });
 
-    window.addEventListener('popstate', () => {
-      navigateTo(location.pathname, false);
+    window.addEventListener('popstate', (e) => {
+      const route = (e.state && e.state.route) ? e.state.route : location.pathname;
+      navigateTo(route, false);
     });
 
+    // Initial route sync
     navigateTo(location.pathname, false);
+  }
+
+  /* ---------- authentication & user state ---------- */
+  function initAuth() {
+    const authHeader = document.getElementById('mg-auth-header');
+    if (!authHeader) return;
+
+    fetch('/auth/user')
+      .then((r) => r.json())
+      .then((data) => {
+        const loginBtn = document.getElementById('mg-login-btn');
+        const userPill = document.getElementById('mg-user-pill');
+        const userAvatar = document.getElementById('mg-user-avatar');
+        const userName = document.getElementById('mg-user-name');
+        const userRole = document.getElementById('mg-user-role');
+        const logoutBtn = document.getElementById('mg-logout-btn');
+
+        if (data.authenticated && data.user) {
+          if (loginBtn) loginBtn.hidden = true;
+          if (userPill) userPill.hidden = false;
+          if (userName) userName.textContent = data.user.username || 'User';
+          if (userAvatar) {
+            if (data.user.avatar_url) userAvatar.src = data.user.avatar_url;
+            else userAvatar.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${data.user.username}`;
+          }
+          if (userRole && data.user.roles && data.user.roles.length) {
+            userRole.textContent = data.user.roles[0];
+          }
+
+          // RBAC: Check required roles on nav items and pages
+          document.querySelectorAll('[data-required-role]').forEach((el) => {
+            const req = el.dataset.requiredRole;
+            const hasRole = data.user.roles && data.user.roles.includes(req);
+            if (!hasRole) {
+              el.classList.add('mg-rbac-denied');
+              if (el.tagName === 'A' || el.tagName === 'BUTTON') {
+                el.style.display = 'none';
+              }
+            }
+          });
+        } else {
+          if (loginBtn) loginBtn.hidden = false;
+          if (userPill) userPill.hidden = true;
+        }
+
+        if (logoutBtn) {
+          logoutBtn.addEventListener('click', () => {
+            fetch('/auth/logout', { method: 'POST' }).then(() => {
+              location.reload();
+            });
+          });
+        }
+      })
+      .catch(() => {});
   }

@@ -3775,3 +3775,90 @@ body.mg-has-sidebar {
   background: rgba(99, 102, 241, 0.08);
   color: var(--mg-accent);
 }
+
+/* ============================================================
+   Enterprise Authentication & RBAC (Phase 15.2)
+   ============================================================ */
+.mg-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mg-auth-header {
+  display: flex;
+  align-items: center;
+}
+
+.mg-auth-login-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+  border: 1px solid var(--mg-accent);
+  border-radius: var(--mg-radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.mg-auth-login-link:hover {
+  background: var(--mg-accent);
+  color: #ffffff;
+}
+
+.mg-user-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--mg-surface-2);
+  border: 1px solid var(--mg-border);
+  padding: 4px 10px 4px 6px;
+  border-radius: 9999px;
+  font-size: 13px;
+}
+
+.mg-user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--mg-border);
+}
+
+.mg-user-name {
+  font-weight: 600;
+  color: var(--mg-text);
+}
+
+.mg-user-role {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: var(--mg-accent-soft);
+  color: var(--mg-accent);
+  border-radius: 4px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.mg-logout-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 14px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.mg-logout-btn:hover {
+  opacity: 1;
+}
+
+.mg-rbac-denied {
+  opacity: 0.3 !important;
+  pointer-events: none !important;
+  filter: grayscale(1) !important;
+}

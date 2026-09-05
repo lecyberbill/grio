@@ -207,6 +207,8 @@ pub struct PageDef {
     pub icon: Option<String>,
     /// Identifiant du conteneur de la page.
     pub id: String,
+    /// Rôle RBAC requis pour accéder à cette page.
+    pub required_role: Option<String>,
 }
 
 /// Application web déclarative.
@@ -250,6 +252,8 @@ pub struct App {
     pub enable_mcp: bool,
     /// Registre de plugins WebAssembly (Phase 15.3).
     pub wasm_registry: std::sync::Arc<crate::wasm::WasmRegistry>,
+    /// Configuration d'authentification Enterprise SSO & RBAC (Phase 15.2). Totalement optionnelle.
+    pub auth_config: crate::auth::AuthConfig,
 }
 
 /// Collecteur d'éléments pour une page dans une application multi-pages.
@@ -258,6 +262,7 @@ pub struct PageBuilder {
     pub(crate) icon: Option<String>,
     pub(crate) children: Vec<Box<dyn Component>>,
     pub(crate) gap: f64,
+    pub(crate) required_role: Option<String>,
 }
 
 impl PageBuilder {
@@ -268,12 +273,19 @@ impl PageBuilder {
             icon: None,
             children: Vec::new(),
             gap: 16.0,
+            required_role: None,
         }
     }
 
     /// Définit l'icône de la page (emoji ou texte court).
     pub fn icon(&mut self, icon: impl Into<String>) -> &mut Self {
         self.icon = Some(icon.into());
+        self
+    }
+
+    /// Exige un rôle RBAC spécifique pour accéder à cette page (ex: "admin").
+    pub fn require_role(&mut self, role: impl Into<String>) -> &mut Self {
+        self.required_role = Some(role.into());
         self
     }
 
@@ -522,7 +534,22 @@ impl App {
             mcp_tools: Vec::new(),
             enable_mcp: true,
             wasm_registry: std::sync::Arc::new(crate::wasm::WasmRegistry::new()),
+            auth_config: crate::auth::AuthConfig::default(),
         }
+    }
+
+    /// **Configure l'authentification Enterprise (SSO & RBAC)** : active et paramètre
+    /// le système d'authentification (GitHub, Google, Keycloak, Mock). Désactivé par défaut.
+    pub fn auth(mut self, config: crate::auth::AuthConfig) -> Self {
+        self.auth_config = config;
+        self
+    }
+
+    /// **Active l'authentification avec un fournisseur SSO spécifique**.
+    pub fn auth_provider(mut self, provider: crate::auth::AuthProvider) -> Self {
+        self.auth_config.enabled = true;
+        self.auth_config.providers.push(provider);
+        self
     }
 
     /// **Enregistre un greffon WebAssembly** : associe une instance de plugin WASM
@@ -568,6 +595,7 @@ impl App {
             title,
             icon: b.icon,
             id: b.id,
+            required_role: b.required_role,
         });
         self.root.push(Box::new(page_col));
         self

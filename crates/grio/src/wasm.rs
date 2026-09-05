@@ -66,7 +66,7 @@ pub struct WasmPlugin {
     limits: SandboxLimits,
     host_functions: HashMap<String, HostFn>,
     /// Handlers natifs enregistrés en interne (pour compatibilité runtime pure Rust ou fallback WASM).
-    methods: Arc<Mutex<HashMap<String, Arc<dyn Fn(&[u8]) -> Result<Vec<u8>> + Send + Sync>>>>,
+    methods: Arc<Mutex<HashMap<String, HostFn>>>,
     wasm_bytes: Option<Vec<u8>>,
 }
 
@@ -160,10 +160,7 @@ impl WasmPlugin {
                 return Err(Error::from("Format binaire WebAssembly invalide (en-tête magic incorrect)"));
             }
             // Parse basique des sections pour extraire les métadonnées et exports
-            let mut capabilities = Vec::new();
-            capabilities.push("grio_process".into());
-            capabilities.push("grio_invoke".into());
-            self.manifest.capabilities = capabilities;
+            self.manifest.capabilities = vec!["grio_process".into(), "grio_invoke".into()];
         }
         Ok(())
     }

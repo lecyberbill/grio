@@ -1017,3 +1017,55 @@ async fn test_phase15_wasm_plugin_sandbox() {
     assert!(resp.contains("[WASM_SECURE: hello from client]"));
 }
 
+#[tokio::test]
+async fn test_phase15_enterprise_auth_and_rbac() {
+    let test_user = UserProfile::new("usr_1", "charlie")
+        .roles(&["analyst"])
+        .email("charlie@corp.local");
+
+    let app = App::new("Auth Test")
+        .auth(
+            AuthConfig::enabled()
+                .with_mock_users(vec![test_user.clone()])
+        )
+        .item(Text::new("req_in").label("Input").value("dataset_a"))
+        .item(Output::new("audit_out").label("Audit"))
+        .on_submit(|ctx| {
+            let user_repr = match ctx.user() {
+                Some(u) => format!("user:{}|role:{}", u.username, u.roles.join(",")),
+                None => "anonymous".to_string(),
+            };
+            ctx.set("audit_out", user_repr);
+            Ok(())
+        });
+
+    let port = 17886;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(400)).await;
+
+    // 1. Test /auth/login page exists
+    let login_page = http_get(&format!("http://127.0.0.1:{port}/auth/login")).await;
+    assert!(login_page.contains("Sign in as") || login_page.contains("Enterprise Single Sign-On"));
+    assert!(login_page.contains("charlie"));
+
+    // 2. Test /auth/user sans session (anonyme)
+    let anon_user = http_get(&format!("http://127.0.0.1:{port}/auth/user")).await;
+    assert!(anon_user.contains(r#""authenticated":false"#));
+
+    // 3. Test execution avec handler sans session
+    let resp_anon = http_post(
+        &format!("http://127.0.0.1:{port}/api/predict"),
+        r#"{"data":["dataset_a"]}"#,
+        None,
+    )
+    .await;
+    assert!(resp_anon.contains("anonymous"));
+}
+
+
