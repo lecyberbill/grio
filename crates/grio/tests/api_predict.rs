@@ -1068,4 +1068,37 @@ async fn test_phase15_enterprise_auth_and_rbac() {
     assert!(resp_anon.contains("anonymous"));
 }
 
+#[tokio::test]
+async fn test_phase15_chromatix_visual_passkey_auth() {
+    let master_key = "lab_secret_key_42";
+    let auth_cfg = AuthConfig::enabled().with_chromatix_pixel(master_key);
+    let auth_mgr = AuthManager::new(auth_cfg);
 
+    let alice = UserProfile::new("alice_phd", "Alice Scientist")
+        .roles(&["researcher", "admin"])
+        .email("alice@lab.internal");
+
+    // 1. Génération d'un passkey PNG valide
+    let badge_png = auth_mgr.create_chromatix_badge(alice.clone(), master_key, 3600);
+    assert!(!badge_png.is_empty(), "PNG badge should not be empty");
+    assert_eq!(&badge_png[0..8], b"\x89PNG\r\n\x1a\n", "Valid PNG header");
+
+    // 2. Décodage et vérification réussie
+    let verified_user = auth_mgr.verify_chromatix_badge(&badge_png, master_key);
+    assert!(verified_user.is_ok(), "Verification should succeed with valid key");
+    let user = verified_user.unwrap();
+    assert_eq!(user.id, "alice_phd");
+    assert_eq!(user.username, "Alice Scientist");
+    assert!(user.has_role("admin"));
+
+    // 3. Tentative de falsification (mauvaise clé maître)
+    let bad_key_verify = auth_mgr.verify_chromatix_badge(&badge_png, "wrong_master_key");
+    assert!(bad_key_verify.is_err(), "Verification must fail with wrong key");
+
+    // 4. Tentative de corruption de l'image (altération de bit)
+    let mut tampered_png = badge_png.clone();
+    let mid = tampered_png.len() / 2;
+    tampered_png[mid] ^= 0xFF; // Corruption binaire
+    let tampered_verify = auth_mgr.verify_chromatix_badge(&tampered_png, master_key);
+    assert!(tampered_verify.is_err(), "Tampered image must be rejected");
+}

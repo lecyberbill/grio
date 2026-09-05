@@ -1675,6 +1675,38 @@ async fn auth_login_page(State(server): State<Arc<AppServer>>) -> impl IntoRespo
             crate::auth::AuthProvider::Keycloak { .. } => {
                 providers_html.push_str(r#"<a href="/auth/keycloak" class="mg-auth-btn mg-auth-keycloak">Sign in with Enterprise Keycloak</a>"#);
             }
+            crate::auth::AuthProvider::ChromatixPixel { .. } => {
+                providers_html.push_str(r#"
+                    <div style="margin-top:16px; padding:16px; border:1px dashed var(--mg-primary); border-radius:10px; background:rgba(99,102,241,0.05);">
+                        <div style="font-size:24px; margin-bottom:4px;">💎</div>
+                        <strong style="font-size:14px;">Chromatix Visual Passkey</strong>
+                        <p style="font-size:12px; color:var(--mg-text-muted); margin:4px 0 12px 0;">Upload your signed PNG Badge / Key</p>
+                        <form id="mg-chromatix-form" method="POST" action="/auth/login" style="display:flex; flex-direction:column; gap:8px;">
+                            <input type="hidden" name="chromatix_payload" id="mg-chromatix-b64" value="">
+                            <input type="file" id="mg-chromatix-file" accept="image/png" style="font-size:12px; color:var(--mg-text);" />
+                            <button type="submit" id="mg-chromatix-submit" class="mg-auth-btn" style="display:none; background:linear-gradient(135deg, #6366f1, #a855f7); color:#fff; border:none;">Unlock with Badge</button>
+                        </form>
+                    </div>
+                    <script>
+                    const fileInput = document.getElementById('mg-chromatix-file');
+                    const b64Input = document.getElementById('mg-chromatix-b64');
+                    const submitBtn = document.getElementById('mg-chromatix-submit');
+                    if (fileInput) {
+                        fileInput.addEventListener('change', (e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                                const b64 = ev.target.result.split(',')[1];
+                                b64Input.value = b64;
+                                submitBtn.style.display = 'block';
+                            };
+                            reader.readAsDataURL(file);
+                        });
+                    }
+                    </script>
+                "#);
+            }
             crate::auth::AuthProvider::Mock { users } => {
                 for u in users {
                     providers_html.push_str(&format!(
@@ -1719,11 +1751,35 @@ async fn auth_login_page(State(server): State<Arc<AppServer>>) -> impl IntoRespo
     Html(html)
 }
 
-/// `POST /auth/login` — Soumission de login mock.
+/// `POST /auth/login` — Soumission de login (Mock ou Chromatix Passkey).
 async fn auth_login_submit(
     State(server): State<Arc<AppServer>>,
     axum::extract::Form(form): axum::extract::Form<HashMap<String, String>>,
 ) -> impl IntoResponse {
+    // 1. Authentification Chromatix Pixel Passkey
+    if let Some(b64) = form.get("chromatix_payload") {
+        if let Some(png_bytes) = crate::media::decode(b64) {
+            for p in &server.app.auth_config.providers {
+                if let crate::auth::AuthProvider::ChromatixPixel { master_key, .. } = p {
+                    if let Ok(user) = server.auth_manager.verify_chromatix_badge(&png_bytes, master_key) {
+                        let token = server.auth_manager.create_session(user);
+                        let mut res = axum::response::Redirect::to("/").into_response();
+                        let cookie_val = format!(
+                            "{}={token}; Path=/; Max-Age={}; HttpOnly; SameSite=Lax",
+                            server.app.auth_config.session_cookie_name,
+                            server.app.auth_config.session_ttl_secs
+                        );
+                        if let Ok(hv) = header::HeaderValue::from_str(&cookie_val) {
+                            res.headers_mut().insert(header::SET_COOKIE, hv);
+                        }
+                        return res;
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Authentification Mock
     if let Some(mock_name) = form.get("mock_user") {
         for p in &server.app.auth_config.providers {
             if let crate::auth::AuthProvider::Mock { users } = p {

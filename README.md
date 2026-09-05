@@ -100,6 +100,7 @@ cargo run -p grio --example greet
 | **Big Data & WebGL GPU Accelerator** | `cargo run -p grio --example bigdata_accelerator` | Zero-copy binary streaming (`Float32Array`), 1M+ points at 60 FPS (`WebGlPlot`), and multidimensional OLAP pivot tables (`PivotTable`). |
 | **Model Context Protocol (MCP) Server** | `cargo run -p grio --example mcp_agent_server` | Official Anthropic MCP v2024-11-05 endpoint (`/mcp/v1`) for Claude Desktop, Cursor & Windsurf tool-calling. |
 | **Enterprise SSO & RBAC** | `cargo run -p grio --example enterprise_sso` | Turnkey Single Sign-On (GitHub, Google, Keycloak, OIDC, Mock dev profiles), role-based access control, session cookies, and route protection (`.require_role()`). |
+| **Chromatix Visual Passkey** | `cargo run -p grio --example chromatix_passkey` | Air-gapped & Lab Authentication using HMAC-signed PNG badges with sealed timestamps and tamper detection. |
 | **Media & Vision** | `cargo run -p grio --example media` | Image, Audio (live mic streaming), Video (live camera streaming), PDF Viewer |
 | **Grid & Containers** | `cargo run -p grio --example grid` | Responsive Grids, Rows, Columns, Panels, and Accordions |
 | **Theming & Tabs** | `cargo run -p grio --example theme_and_tabs` | Multi-tab workflows, light/dark themes, brand accent customization |
@@ -113,6 +114,7 @@ d:\Projet\UI
 ├─ Cargo.toml                 Workspace root
 ├─ README.md                  Main documentation
 ├─ COMPONENTS.md              Comprehensive component reference
+├─ CHROMATIX_AUTH.md          Chromatix Visual Passkey & Steganography Auth Guide
 ├─ PLUGINS.md                 WebAssembly sandbox plugin engine & ABI guide
 ├─ ROADMAP.md                 Completed phases and feature checklist
 └─ crates/
@@ -120,7 +122,7 @@ d:\Projet\UI
    │  ├─ src/
    │  │  ├─ lib.rs            Public API exports & crate documentation
    │  │  ├─ app.rs            App builder & event distribution engine
-   │  │  ├─ auth.rs           Enterprise Auth & RBAC (OIDC, OAuth2, SSO, session store)
+   │  │  ├─ auth.rs           Enterprise Auth & RBAC (OIDC, OAuth2, Chromatix Pixel Passkeys)
    │  │  ├─ ai.rs             Multi-engine LLM connectors (LM Studio, Ollama, OpenAI)
    │  │  ├─ mcp.rs            Official Model Context Protocol (MCP v2024-11-05) Server
    │  │  ├─ wasm.rs           Sandboxed WebAssembly Plugin Engine & Extensible ABI
