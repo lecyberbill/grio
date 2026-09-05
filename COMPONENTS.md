@@ -22,7 +22,8 @@
   - [Checkbox](#checkbox)
   - [Dropdown](#dropdown)
   - [DatePicker & TimePicker](#datepicker--timepicker)
-  - [Dataframe](#dataframe)
+  - [Dataframe & DataEditor](#dataframe)
+  - [PivotTable (Multidimensional OLAP Cube & Slicer)](#pivottable-multidimensional-olap-cube--slicer)
   - [Code Editor](#code-editor)
   - [Explorer](#explorer)
 - [Output & AI Interaction Components](#output--ai-interaction-components)
@@ -30,6 +31,7 @@
   - [Output](#output)
   - [Markdown](#markdown)
   - [Plot (SVG Charts)](#plot-svg-charts)
+  - [WebGlPlot (GPU Accelerated 1M+ Points Time-Series)](#webglplot-gpu-accelerated-1m-points-time-series)
   - [Gallery](#gallery)
   - [Progress Bar](#progress-bar)
 - [Media Components (Vision, Audio & Documents)](#media-components-vision-audio--documents)
@@ -377,6 +379,32 @@ DataEditor::new("data_grid")
 
 ---
 
+### `PivotTable` (Multidimensional OLAP Cube & Slicer)
+Interactive multidimensional pivot table with real-time in-browser dynamic aggregations (`Sum`, `Mean`, `Count`, `Min`, `Max`) across rows and columns with zero external dependencies.
+
+```rust
+PivotTable::new("sales_pivot")
+    .label("Revenue OLAP Slicer")
+    .data(vec![
+        vec![json!("Europe"), json!("Electronics"), json!(12450.0)],
+        vec![json!("Europe"), json!("Software"), json!(8900.0)],
+        vec![json!("North America"), json!("Electronics"), json!(24100.0)],
+        vec![json!("North America"), json!("Software"), json!(19500.0)],
+    ])
+    .row_dimensions(vec!["Region".into()])
+    .col_dimensions(vec!["Category".into()])
+    .val_dimension("Revenue".into())
+    .aggregator(PivotAggregator::Sum)
+```
+
+- **Builder Methods**:
+  - `.row_dimensions(vec![...])`: Grouping dimensions for row headers.
+  - `.col_dimensions(vec![...])`: Grouping dimensions for column headers.
+  - `.val_dimension(dim)`: Metric field to aggregate.
+  - `.aggregator(PivotAggregator::Sum | Mean | Count | Min | Max)`: Aggregation function.
+
+---
+
 ### `DynamicContainer` (Reactive Slots / Runtime Component Injection)
 Dynamic slot container whose children components can be added, replaced, or removed at runtime from server handlers without pre-declaring static graphs.
 
@@ -497,6 +525,29 @@ ctx.set("eval_metrics", serde_json::json!({
         { "name": "Model B", "data": [78.2, 74.0, 62.1, 48.9] }
     ]
 }));
+```
+
+---
+
+### `WebGlPlot` (GPU-Accelerated 1,000,000+ Points Time-Series)
+Hardware-accelerated WebGL2 rendering engine featuring vertex shaders, dynamic VBO buffers, live 60 FPS telemetry, auto-scaling, and zero-copy binary WebSocket ingestion.
+
+```rust
+WebGlPlot::new("gpu_telemetry")
+    .label("High-Frequency Sensor Stream (1,000,000 points)")
+    .height(420)
+    .max_points(1_000_000)
+    .series(vec![
+        WebGlSeries::new("Ch1 Voltage", "#00ffcc"),
+        WebGlSeries::new("Ch2 Current", "#ff007f"),
+    ])
+```
+
+- **Streaming Binary Data from Handlers (Zero-Copy)**:
+```rust
+// Stream 10,000 f32 sample points with zero JSON overhead
+let samples: Vec<f32> = (0..10_000).map(|i| (i as f32 * 0.05).sin()).collect();
+ctx.append_f32_points("gpu_telemetry", &samples);
 ```
 
 ---

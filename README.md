@@ -190,6 +190,8 @@ d:\Projet\UI
 | `Code` | `code` | In/Out | Syntax-highlighted code editor | `.language()`, `.lines()`, `.theme()`, `.interactive()` |
 | `Json` | `json` | In/Out | Live-validated JSON editor / viewer | `.label()`, `.value()`, `.interactive()`, `.output()` |
 | `Html` | `html` | In/Out | Custom HTML/CSS/JS with event delegation & `window.grio` | `.value()`, `.input()`, `.output()` |
+| `WebGlPlot` | `webglplot` | Output | Hardware-accelerated GPU 1M+ points time-series | `.series()`, `.max_points()`, `.height()` |
+| `PivotTable` | `pivottable` | In/Out | Multidimensional OLAP cube with dynamic aggregations | `.row_dimensions()`, `.col_dimensions()`, `.aggregator()` |
 | `Label` | `label` | Output | Gradio-style value badge with semantic color | `.label()`, `.value()`, `.variant()`, `.size()` |
 | `Timer` | `timer` | Output | Periodic clock emitting `change` each tick | `.label()`, `.interval()`, `.running()` |
 | `DownloadButton` | `download` | Output | Server-triggered file download | `.label()`, `.filename()`, `.value()` |
