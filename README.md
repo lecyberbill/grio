@@ -112,34 +112,38 @@ d:\Projet\UI
 ├─ Cargo.toml                 Workspace root
 ├─ README.md                  Main documentation
 ├─ COMPONENTS.md              Comprehensive component reference
+├─ PLUGINS.md                 WebAssembly sandbox plugin engine & ABI guide
 ├─ ROADMAP.md                 Completed phases and feature checklist
 └─ crates/
    ├─ grio                    Core framework crate
    │  ├─ src/
    │  │  ├─ lib.rs            Public API exports & crate documentation
    │  │  ├─ app.rs            App builder & event distribution engine
+   │  │  ├─ ai.rs             Multi-engine LLM connectors (LM Studio, Ollama, OpenAI)
+   │  │  ├─ mcp.rs            Official Model Context Protocol (MCP v2024-11-05) Server
+   │  │  ├─ wasm.rs           Sandboxed WebAssembly Plugin Engine & Extensible ABI
    │  │  ├─ components/       Modular Rust Component implementations
    │  │  │  ├─ mod.rs         Core traits, WithLayout, and component re-exports
    │  │  │  ├─ layout.rs      Row, Column, Panel, Grid, Tabs, Accordion, Drawer, DynamicContainer
    │  │  │  ├─ forms.rs       Text, Number, Slider, Checkbox, Dropdown, Radio, RichText, File...
    │  │  │  ├─ media.rs       Image, AnnotatedImage, ImageComparison, Audio, Video, Pdf, Model3D
-   │  │  │  ├─ data.rs        Dataframe, DataEditor, Code, Json, HighlightedText, CodeDiff, Map
+   │  │  │  ├─ data.rs        Dataframe, DataEditor, WebGlPlot, PivotTable, Code, Json, Map...
    │  │  │  └─ special.rs     Chatbot, Metric, Plot, Progress, NodeGraph, Timer, DownloadButton
-   │  │  ├─ context.rs        Handler Context API (get, set, append, append_component, alert, progress)
+   │  │  ├─ context.rs        Handler Context API (get, set, append, append_f32_points, call_wasm)
    │  │  ├─ events.rs         WireEvent & EventName model
    │  │  ├─ server.rs         Axum HTTP/WebSocket/REST server & OpenAPI engine
    │  │  ├─ showcase.rs       Native All-in-One interactive showcase generator
    │  │  └─ assets/           Embedded Zero-NodeJS Web Engine
    │  │     ├─ styles.css     Unified CSS3 design system (Variables, Themes, Glassmorphism)
    │  │     └─ js/            Modular Vanilla JavaScript frontend
-   │  │        ├─ core.js     App bootstrap, WebSocket client, event delegation, slots
+   │  │        ├─ core.js     App bootstrap, WebSocket client, event delegation, slots, binary
    │  │        ├─ forms.js    Standard inputs & RichText Markdown editor
-   │  │        ├─ data.js     Dataframe, DataEditor (TSV/CSV paste), Code & JSON editors
+   │  │        ├─ data.js     Dataframe, DataEditor, WebGL2 GPU Engine, OLAP PivotTable
    │  │        ├─ media.js    Media players, Inpainting Canvas, Pdf Document Viewer
    │  │        ├─ special.js  Chatbot streaming, NodeGraph DAG workflow editor, OpenStreetMap
    │  │        ├─ router.js   MultiPage SPA client router & History API
    │  │        └─ i18n.js     Multi-language translation engine
-   │  └─ examples/            Showcase examples (it_desk, prompt_to_image, rich_data_slots...)
+   │  └─ examples/            Showcase examples (it_desk, agent_hub, bigdata_accelerator, wasm_plugins...)
    └─ grio-cli                Standalone developer CLI tool
 ```
 
