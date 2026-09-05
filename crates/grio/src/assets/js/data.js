@@ -1144,3 +1144,622 @@
     }
   });
 
+  /* ---------- WebGL2 High-Frequency Plot Engine (Phase 14) ---------- */
+
+  const WEBGL_VS = `#version 300 es
+    precision highp float;
+    in vec2 a_pos;
+    uniform mat3 u_matrix;
+    void main() {
+      vec3 pos = u_matrix * vec3(a_pos, 1.0);
+      gl_Position = vec4(pos.xy, 0.0, 1.0);
+    }
+  `;
+
+  const WEBGL_FS = `#version 300 es
+    precision highp float;
+    uniform vec4 u_color;
+    out vec4 fragColor;
+    void main() {
+      fragColor = u_color;
+    }
+  `;
+
+  function hexToRgba(hex, alpha = 1.0) {
+    let c = hex.replace('#', '');
+    if (c.length === 3) c = c.split('').map((x) => x + x).join('');
+    const num = parseInt(c, 16);
+    return [
+      ((num >> 16) & 255) / 255,
+      ((num >> 8) & 255) / 255,
+      (num & 255) / 255,
+      alpha,
+    ];
+  }
+
+  register('webgl_plot', {
+    mount(c) {
+      const p = c.props;
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-webgl-plot-wrap';
+
+      // En-tête avec label, titre et métriques FPS
+      const header = document.createElement('div');
+      header.className = 'mg-webgl-plot-header';
+      
+      const titleEl = document.createElement('div');
+      titleEl.className = 'mg-webgl-plot-title';
+      titleEl.textContent = p.title || p.label || 'WebGL Accelerated Stream';
+      header.appendChild(titleEl);
+
+      const statsEl = document.createElement('div');
+      statsEl.className = 'mg-webgl-plot-stats';
+      header.appendChild(statsEl);
+
+      wrap.appendChild(header);
+
+      // Conteneur Canevas
+      const canvasHolder = document.createElement('div');
+      canvasHolder.className = 'mg-webgl-canvas-holder';
+      canvasHolder.style.height = (p.height || 340) + 'px';
+
+      const canvas = document.createElement('canvas');
+      canvas.className = 'mg-webgl-canvas';
+      canvasHolder.appendChild(canvas);
+
+      // Overlay SVG pour la grille, les repères et la légende
+      const svgOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svgOverlay.setAttribute('class', 'mg-webgl-svg-overlay');
+      canvasHolder.appendChild(svgOverlay);
+
+      // Tooltip interactif
+      const tooltip = document.createElement('div');
+      tooltip.className = 'mg-webgl-tooltip';
+      tooltip.style.display = 'none';
+      canvasHolder.appendChild(tooltip);
+
+      wrap.appendChild(canvasHolder);
+      c.el.appendChild(wrap);
+
+      // Initialisation Contexte WebGL2
+      const gl = canvas.getContext('webgl2', { alpha: true, antialias: true, preserveDrawingBuffer: false });
+      if (!gl) {
+        canvasHolder.innerHTML = '<div class="mg-toast mg-toast-error">WebGL2 non supporté par votre navigateur.</div>';
+        return;
+      }
+
+      // Compilation des shaders
+      function createShader(gl, type, source) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, source);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+          console.error(gl.getShaderInfoLog(s));
+          gl.deleteShader(s);
+          return null;
+        }
+        return s;
+      }
+
+      const vs = createShader(gl, gl.VERTEX_SHADER, WEBGL_VS);
+      const fs = createShader(gl, gl.FRAGMENT_SHADER, WEBGL_FS);
+      const prog = gl.createProgram();
+      gl.attachShader(prog, vs);
+      gl.attachShader(prog, fs);
+      gl.linkProgram(prog);
+
+      const aPosLoc = gl.getAttribLocation(prog, 'a_pos');
+      const uMatrixLoc = gl.getUniformLocation(prog, 'u_matrix');
+      const uColorLoc = gl.getUniformLocation(prog, 'u_color');
+
+      // État des séries
+      const palette = (p.colors && p.colors.length) ? p.colors : ['#00f0ff', '#ff007f', '#7000ff', '#00ff66'];
+      const maxPts = p.max_points || 200000;
+      let series = [];
+
+      function createSeriesBuffer(name, hexColor, initialData) {
+        const vao = gl.createVertexArray();
+        const vbo = gl.createBuffer();
+        gl.bindVertexArray(vao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+
+        const capacity = maxPts * 2; // [x, y]
+        const dataArr = new Float32Array(capacity);
+        let count = 0;
+
+        if (initialData && initialData.length) {
+          const len = Math.min(initialData.length, maxPts);
+          for (let i = 0; i < len; i++) {
+            dataArr[i * 2] = i;
+            dataArr[i * 2 + 1] = initialData[i];
+          }
+          count = len;
+          gl.bufferData(gl.ARRAY_BUFFER, dataArr, gl.DYNAMIC_DRAW);
+        } else {
+          gl.bufferData(gl.ARRAY_BUFFER, dataArr.byteLength, gl.DYNAMIC_DRAW);
+        }
+
+        gl.enableVertexAttribArray(aPosLoc);
+        gl.vertexAttribPointer(aPosLoc, 2, gl.FLOAT, false, 0, 0);
+
+        return {
+          name,
+          color: hexToRgba(hexColor),
+          hex: hexColor,
+          vao,
+          vbo,
+          dataArr,
+          count,
+        };
+      }
+
+      if (Array.isArray(p.series) && p.series.length) {
+        p.series.forEach((s, idx) => {
+          series.push(createSeriesBuffer(s.name || `Série ${idx + 1}`, s.color || palette[idx % palette.length], s.data));
+        });
+      } else {
+        series.push(createSeriesBuffer('Signal Alpha', palette[0], null));
+      }
+
+      // Gestion Viewport & Redimensionnement
+      let viewWidth = 0;
+      let viewHeight = 0;
+      let dpr = window.devicePixelRatio || 1;
+
+      // Domaine (Bounding Box coordonnées réelles X, Y)
+      let domain = { xMin: 0, xMax: 1000, yMin: -1.5, yMax: 1.5 };
+      let autoScale = true;
+
+      function resize() {
+        const rect = canvasHolder.getBoundingClientRect();
+        viewWidth = Math.max(10, rect.width);
+        viewHeight = Math.max(10, rect.height);
+        dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.round(viewWidth * dpr);
+        canvas.height = Math.round(viewHeight * dpr);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        render();
+      }
+
+      const ro = new ResizeObserver(resize);
+      ro.observe(canvasHolder);
+
+      // Calcul des limites auto-scale
+      function updateDomain() {
+        if (!autoScale) return;
+        let totalCount = 0;
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+
+        series.forEach((s) => {
+          totalCount += s.count;
+          if (s.count > 0) {
+            const firstX = s.dataArr[0];
+            const lastX = s.dataArr[(s.count - 1) * 2];
+            minX = Math.min(minX, firstX);
+            maxX = Math.max(maxX, lastX);
+
+            for (let i = 0; i < s.count; i++) {
+              const y = s.dataArr[i * 2 + 1];
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+            }
+          }
+        });
+
+        if (minX === Infinity) {
+          domain = { xMin: 0, xMax: 100, yMin: -1, yMax: 1 };
+        } else {
+          if (minX === maxX) maxX += 1;
+          if (minY === maxY) { minY -= 1; maxY += 1; }
+          const padY = (maxY - minY) * 0.1 || 0.1;
+          domain = {
+            xMin: minX,
+            xMax: maxX,
+            yMin: minY - padY,
+            yMax: maxY + padY,
+          };
+        }
+      }
+
+      // Matrice de transformation 2D : Normalise le rectangle (domain) vers NDC [-1, 1]
+      function computeMatrix() {
+        const dx = domain.xMax - domain.xMin || 1;
+        const dy = domain.yMax - domain.yMin || 1;
+
+        // sx = 2 / dx,  tx = - (xMax + xMin) / dx
+        // sy = 2 / dy,  ty = - (yMax + yMin) / dy
+        const sx = 2 / dx;
+        const sy = 2 / dy;
+        const tx = -(domain.xMax + domain.xMin) / dx;
+        const ty = -(domain.yMax + domain.yMin) / dy;
+
+        return new Float32Array([
+          sx, 0, 0,
+          0, sy, 0,
+          tx, ty, 1
+        ]);
+      }
+
+      // Métriques FPS & Temps de Rendu
+      let lastFpsTime = performance.now();
+      let frames = 0;
+      let currentFps = 60;
+      let totalRenderPoints = 0;
+
+      function render() {
+        if (!gl || viewWidth <= 0 || viewHeight <= 0) return;
+
+        // Mise à jour domaine
+        updateDomain();
+        const mat = computeMatrix();
+
+        // Rendu WebGL
+        gl.clearColor(0.06, 0.07, 0.1, 0.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        gl.useProgram(prog);
+        gl.uniformMatrix3fv(uMatrixLoc, false, mat);
+
+        totalRenderPoints = 0;
+        series.forEach((s) => {
+          if (s.count > 1) {
+            gl.bindVertexArray(s.vao);
+            gl.uniform4fv(uColorLoc, s.color);
+            gl.drawArrays(gl.LINE_STRIP, 0, s.count);
+            totalRenderPoints += s.count;
+          }
+        });
+
+        // Overlay SVG : Grille, Repères & Axes
+        renderSvgOverlay();
+
+        // Stats FPS
+        frames++;
+        const now = performance.now();
+        if (now - lastFpsTime >= 500) {
+          currentFps = Math.round((frames * 1000) / (now - lastFpsTime));
+          frames = 0;
+          lastFpsTime = now;
+          if (p.show_fps !== false) {
+            statsEl.innerHTML = `<span class="mg-webgl-badge-pts">⚡ ${totalRenderPoints.toLocaleString()} pts</span> <span class="mg-webgl-badge-fps">${currentFps} FPS</span>`;
+          }
+        }
+      }
+
+      function renderSvgOverlay() {
+        const W = viewWidth;
+        const H = viewHeight;
+        const pad = { l: 45, r: 15, t: 15, b: 25 };
+
+        let svg = '';
+        // Grille horizontale Y
+        const yTicks = 4;
+        const ySpan = domain.yMax - domain.yMin || 1;
+        for (let i = 0; i <= yTicks; i++) {
+          const val = domain.yMin + (ySpan * i) / yTicks;
+          const yPx = H - pad.b - ((val - domain.yMin) / ySpan) * (H - pad.t - pad.b);
+          svg += `<line x1="${pad.l}" y1="${yPx}" x2="${W - pad.r}" y2="${yPx}" stroke="rgba(255,255,255,0.07)" stroke-dasharray="3,3"/>`;
+          svg += `<text x="${pad.l - 6}" y="${yPx + 4}" fill="rgba(255,255,255,0.5)" font-size="10" text-anchor="end">${val.toFixed(2)}</text>`;
+        }
+
+        // Grille verticale X
+        const xTicks = 5;
+        const xSpan = domain.xMax - domain.xMin || 1;
+        for (let i = 0; i <= xTicks; i++) {
+          const val = domain.xMin + (xSpan * i) / xTicks;
+          const xPx = pad.l + ((val - domain.xMin) / xSpan) * (W - pad.l - pad.r);
+          svg += `<line x1="${xPx}" y1="${pad.t}" x2="${xPx}" y2="${H - pad.b}" stroke="rgba(255,255,255,0.07)" stroke-dasharray="3,3"/>`;
+          svg += `<text x="${xPx}" y="${H - 6}" fill="rgba(255,255,255,0.5)" font-size="10" text-anchor="middle">${Math.round(val)}</text>`;
+        }
+
+        // Légende des séries
+        let legendX = pad.l + 10;
+        series.forEach((s) => {
+          svg += `<rect x="${legendX}" y="6" width="10" height="10" rx="2" fill="${s.hex}"/>`;
+          svg += `<text x="${legendX + 14}" y="15" fill="rgba(255,255,255,0.85)" font-size="11" font-weight="600">${esc(s.name)}</text>`;
+          legendX += (s.name.length * 7) + 36;
+        });
+
+        svgOverlay.innerHTML = svg;
+      }
+
+      // Application des flux binaires sans copie
+      c.applyBinary = (buffer) => {
+        const floatView = new Float32Array(buffer);
+        if (!series.length) return;
+        const target = series[0];
+        const numNewPoints = floatView.length;
+
+        if (numNewPoints <= 0) return;
+
+        // Si le buffer dépasse maxPts, on décale en mode défilement continu
+        if (target.count + numNewPoints > maxPts) {
+          const overflow = (target.count + numNewPoints) - maxPts;
+          target.dataArr.copyWithin(0, overflow * 2, target.count * 2);
+          target.count -= overflow;
+        }
+
+        const startIdx = target.count;
+        let lastX = startIdx > 0 ? target.dataArr[(startIdx - 1) * 2] : 0;
+
+        for (let i = 0; i < numNewPoints; i++) {
+          const writeIdx = (startIdx + i) * 2;
+          lastX += 1;
+          target.dataArr[writeIdx] = lastX;
+          target.dataArr[writeIdx + 1] = floatView[i];
+        }
+        target.count += numNewPoints;
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, target.vbo);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, target.dataArr.subarray(0, target.count * 2));
+
+        render();
+      };
+
+      c.applyBinarySeries = (sIdx, buffer) => {
+        while (series.length <= sIdx) {
+          series.push(createSeriesBuffer(`Série ${series.length + 1}`, palette[series.length % palette.length], null));
+        }
+        const target = series[sIdx];
+        const floatView = new Float32Array(buffer);
+        const numNewPoints = floatView.length;
+
+        if (numNewPoints <= 0) return;
+
+        if (target.count + numNewPoints > maxPts) {
+          const overflow = (target.count + numNewPoints) - maxPts;
+          target.dataArr.copyWithin(0, overflow * 2, target.count * 2);
+          target.count -= overflow;
+        }
+
+        const startIdx = target.count;
+        let lastX = startIdx > 0 ? target.dataArr[(startIdx - 1) * 2] : 0;
+
+        for (let i = 0; i < numNewPoints; i++) {
+          const writeIdx = (startIdx + i) * 2;
+          lastX += 1;
+          target.dataArr[writeIdx] = lastX;
+          target.dataArr[writeIdx + 1] = floatView[i];
+        }
+        target.count += numNewPoints;
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, target.vbo);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, target.dataArr.subarray(0, target.count * 2));
+
+        render();
+      };
+
+      c.apply = (patch) => {
+        if (patch.title != null) titleEl.textContent = patch.title;
+        if (patch.visible != null) wrap.hidden = !patch.visible;
+        if (Array.isArray(patch.series)) {
+          series = [];
+          patch.series.forEach((s, idx) => {
+            series.push(createSeriesBuffer(s.name || `Série ${idx + 1}`, s.color || palette[idx % palette.length], s.data));
+          });
+          render();
+        }
+      };
+
+      render();
+    }
+  });
+
+  /* ---------- OLAP Pivot Table Engine (Phase 14) ---------- */
+
+  register('pivot_table', {
+    mount(c) {
+      const p = c.props;
+      const wrap = document.createElement('div');
+      wrap.className = 'mg-pivot-wrap';
+
+      const labelEl = document.createElement('div');
+      labelEl.className = 'mg-label';
+      labelEl.innerHTML = `<span>${esc(p.label || 'Tableau Croisé Dynamique OLAP')}</span>`;
+      wrap.appendChild(labelEl);
+
+      // Barre de contrôle des axes OLAP
+      const controls = document.createElement('div');
+      controls.className = 'mg-pivot-controls';
+
+      let headers = Array.isArray(p.headers) ? p.headers.slice() : [];
+      let rawData = Array.isArray(p.data) ? p.data.slice() : [];
+      let rowDims = Array.isArray(p.row_dimensions) ? p.row_dimensions.slice() : [];
+      let colDims = Array.isArray(p.col_dimensions) ? p.col_dimensions.slice() : [];
+      let valField = p.value_field || (headers.length > 0 ? headers[headers.length - 1] : '');
+      let aggregator = p.aggregator || 'sum';
+
+      // Sélecteur Dimension Lignes
+      const rowSelectHolder = document.createElement('div');
+      rowSelectHolder.className = 'mg-pivot-select-group';
+      rowSelectHolder.innerHTML = '<label>📌 Lignes :</label>';
+      const rowSelect = document.createElement('select');
+      rowSelect.className = 'mg-select';
+      rowSelectHolder.appendChild(rowSelect);
+      controls.appendChild(rowSelectHolder);
+
+      // Sélecteur Dimension Colonnes
+      const colSelectHolder = document.createElement('div');
+      colSelectHolder.className = 'mg-pivot-select-group';
+      colSelectHolder.innerHTML = '<label>📊 Colonnes :</label>';
+      const colSelect = document.createElement('select');
+      colSelect.className = 'mg-select';
+      colSelectHolder.appendChild(colSelect);
+      controls.appendChild(colSelectHolder);
+
+      // Sélecteur Champ Valeur
+      const valSelectHolder = document.createElement('div');
+      valSelectHolder.className = 'mg-pivot-select-group';
+      valSelectHolder.innerHTML = '<label>📈 Métrique :</label>';
+      const valSelect = document.createElement('select');
+      valSelect.className = 'mg-select';
+      valSelectHolder.appendChild(valSelect);
+      controls.appendChild(valSelectHolder);
+
+      // Sélecteur Agrégateur
+      const aggSelectHolder = document.createElement('div');
+      aggSelectHolder.className = 'mg-pivot-select-group';
+      aggSelectHolder.innerHTML = '<label>⚙️ Agrégation :</label>';
+      const aggSelect = document.createElement('select');
+      aggSelect.className = 'mg-select';
+      [
+        { id: 'sum', label: 'Somme (Sum)' },
+        { id: 'mean', label: 'Moyenne (Mean)' },
+        { id: 'count', label: 'Nombre (Count)' },
+        { id: 'min', label: 'Minimum' },
+        { id: 'max', label: 'Maximum' },
+      ].forEach((a) => {
+        const opt = document.createElement('option');
+        opt.value = a.id;
+        opt.textContent = a.label;
+        if (a.id === aggregator) opt.selected = true;
+        aggSelect.appendChild(opt);
+      });
+      aggSelectHolder.appendChild(aggSelect);
+      controls.appendChild(aggSelectHolder);
+
+      wrap.appendChild(controls);
+
+      // Table conteneur
+      const tableHolder = document.createElement('div');
+      tableHolder.className = 'mg-pivot-table-holder';
+      if (p.height) tableHolder.style.maxHeight = p.height + 'px';
+      wrap.appendChild(tableHolder);
+
+      c.el.appendChild(wrap);
+
+      function updateSelects() {
+        rowSelect.innerHTML = '<option value="">(Aucune)</option>';
+        colSelect.innerHTML = '<option value="">(Aucune)</option>';
+        valSelect.innerHTML = '<option value="">(Décompte)</option>';
+
+        headers.forEach((h) => {
+          const rOpt = document.createElement('option');
+          rOpt.value = h;
+          rOpt.textContent = h;
+          if (rowDims.includes(h)) rOpt.selected = true;
+          rowSelect.appendChild(rOpt);
+
+          const cOpt = document.createElement('option');
+          cOpt.value = h;
+          cOpt.textContent = h;
+          if (colDims.includes(h)) cOpt.selected = true;
+          colSelect.appendChild(cOpt);
+
+          const vOpt = document.createElement('option');
+          vOpt.value = h;
+          vOpt.textContent = h;
+          if (h === valField) vOpt.selected = true;
+          valSelect.appendChild(vOpt);
+        });
+      }
+
+      function computePivot() {
+        const rowKey = rowSelect.value;
+        const colKey = colSelect.value;
+        const valKey = valSelect.value;
+        const agg = aggSelect.value;
+
+        const rowIdx = headers.indexOf(rowKey);
+        const colIdx = headers.indexOf(colKey);
+        const valIdx = headers.indexOf(valKey);
+
+        const rowValues = new Set();
+        const colValues = new Set();
+        // matrix[rVal][cVal] = { sum, count, min, max }
+        const matrix = {};
+
+        rawData.forEach((row) => {
+          const r = rowIdx >= 0 ? String(row[rowIdx] ?? '(vide)') : 'Total';
+          const c = colIdx >= 0 ? String(row[colIdx] ?? '(vide)') : 'Total';
+          let v = valIdx >= 0 ? Number(row[valIdx]) : 1;
+          if (isNaN(v)) v = 0;
+
+          rowValues.add(r);
+          colValues.add(c);
+
+          if (!matrix[r]) matrix[r] = {};
+          if (!matrix[r][c]) {
+            matrix[r][c] = { sum: v, count: 1, min: v, max: v };
+          } else {
+            const cell = matrix[r][c];
+            cell.sum += v;
+            cell.count += 1;
+            if (v < cell.min) cell.min = v;
+            if (v > cell.max) cell.max = v;
+          }
+        });
+
+        const sortedRows = Array.from(rowValues).sort();
+        const sortedCols = Array.from(colValues).sort();
+
+        let html = '<table class="mg-table mg-pivot-table"><thead><tr>';
+        html += `<th class="mg-pivot-corner">${esc(rowKey || 'Lignes')} \\ ${esc(colKey || 'Colonnes')}</th>`;
+        sortedCols.forEach((c) => {
+          html += `<th>${esc(c)}</th>`;
+        });
+        html += '<th class="mg-pivot-total-col">Total</th></tr></thead><tbody>';
+
+        sortedRows.forEach((r) => {
+          html += `<tr><td class="mg-pivot-row-header">${esc(r)}</td>`;
+          let rowSum = 0, rowCount = 0, rowMin = Infinity, rowMax = -Infinity;
+
+          sortedCols.forEach((c) => {
+            const cell = matrix[r] && matrix[r][c];
+            if (cell) {
+              rowSum += cell.sum;
+              rowCount += cell.count;
+              if (cell.min < rowMin) rowMin = cell.min;
+              if (cell.max > rowMax) rowMax = cell.max;
+
+              let display = 0;
+              if (agg === 'sum') display = cell.sum;
+              else if (agg === 'mean') display = cell.count ? cell.sum / cell.count : 0;
+              else if (agg === 'count') display = cell.count;
+              else if (agg === 'min') display = cell.min;
+              else if (agg === 'max') display = cell.max;
+
+              html += `<td>${display.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>`;
+            } else {
+              html += '<td class="mg-muted">-</td>';
+            }
+          });
+
+          let rowTotalDisplay = 0;
+          if (agg === 'sum') rowTotalDisplay = rowSum;
+          else if (agg === 'mean') rowTotalDisplay = rowCount ? rowSum / rowCount : 0;
+          else if (agg === 'count') rowTotalDisplay = rowCount;
+          else if (agg === 'min') rowTotalDisplay = rowMin === Infinity ? 0 : rowMin;
+          else if (agg === 'max') rowTotalDisplay = rowMax === -Infinity ? 0 : rowMax;
+
+          html += `<td class="mg-pivot-total-cell">${rowTotalDisplay.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td></tr>`;
+        });
+
+        html += '</tbody></table>';
+        tableHolder.innerHTML = html;
+      }
+
+      rowSelect.addEventListener('change', computePivot);
+      colSelect.addEventListener('change', computePivot);
+      valSelect.addEventListener('change', computePivot);
+      aggSelect.addEventListener('change', computePivot);
+
+      updateSelects();
+      computePivot();
+
+      c.apply = (patch) => {
+        if (Array.isArray(patch.headers)) {
+          headers = patch.headers.slice();
+          updateSelects();
+        }
+        if (Array.isArray(patch.data)) {
+          rawData = patch.data.slice();
+        }
+        if (patch.visible != null) wrap.hidden = !patch.visible;
+        computePivot();
+      };
+    }
+  });
+
+

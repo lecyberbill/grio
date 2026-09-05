@@ -155,6 +155,32 @@ const byId = {};
           root.style.setProperty('--mg-font-family', m.font);
           root.style.setProperty('--mg-font', m.font);
         }
+      } else if (m.t === 'bin') {
+        const c = byId[m.c];
+        if (c && c.applyBinary) {
+          try {
+            const raw = atob(m.b64);
+            const len = raw.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) bytes[i] = raw.charCodeAt(i);
+            c.applyBinary(bytes.buffer);
+          } catch (err) {
+            console.error('[grio binary error]', err);
+          }
+        }
+      } else if (m.t === 'bin_series') {
+        const c = byId[m.c];
+        if (c && c.applyBinarySeries) {
+          try {
+            const raw = atob(m.b64);
+            const len = raw.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) bytes[i] = raw.charCodeAt(i);
+            c.applyBinarySeries(m.s || 0, bytes.buffer);
+          } catch (err) {
+            console.error('[grio binary series error]', err);
+          }
+        }
       } else if (m.t === 'alert') {
         toast(m.m || '—', m.level || 'info');
       } else if (m.t === 'error') {

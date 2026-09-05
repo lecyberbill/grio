@@ -107,6 +107,32 @@ impl App {
                 ctx.alert(AlertLevel::Info, "Telemetry drawer opened.");
                 Ok(())
             })
+            .on_click("btn_sc_webgl_burst", |ctx| {
+                let mut burst = Vec::with_capacity(20_000);
+                for i in 0..20_000 {
+                    let t = i as f32 * 0.02;
+                    burst.push((t * 2.0).sin() * 0.8 + (t * 10.0).cos() * 0.25);
+                }
+                ctx.append_f32_points("sc_webgl", &burst);
+                ctx.alert(AlertLevel::Success, "⚡ 20,000 points injectés sans copie dans le GPU WebGL2 !");
+                Ok(())
+            })
+            .on_click("btn_sc_webgl_stream", |ctx| {
+                ctx.alert(AlertLevel::Info, "Streaming haute fréquence actif (2 000 pts/sec)...");
+                for batch in 0..20 {
+                    if ctx.cancelled() {
+                        break;
+                    }
+                    let mut chunk = Vec::with_capacity(250);
+                    for i in 0..250 {
+                        let t = (batch * 250 + i) as f32 * 0.08;
+                        chunk.push((t * 0.9).sin() * 0.85 + (t * 4.0).sin() * 0.25);
+                    }
+                    ctx.append_f32_points("sc_webgl", &chunk);
+                    std::thread::sleep(std::time::Duration::from_millis(30));
+                }
+                Ok(())
+            })
             .on_submit(showcase_submit)
             .flow(
                 &[
@@ -208,7 +234,36 @@ impl App {
                 })
 
                 // --- Tab 3 : Data, Tables & Code ---
-                .tab("📊 Data & DataEditor", |b| {
+                .tab("📊 Data & GPU BigData", |b| {
+                    b.item(WebGlPlot::new("sc_webgl")
+                        .title("⚡ WebGL2 GPU-Accelerated Waveform (Binary Stream & 60 FPS)")
+                        .xlabel("Échantillons (t)")
+                        .ylabel("Amplitude")
+                        .colors(&["#00f0ff", "#ff007f"])
+                        .height(300)
+                        .max_points(150_000)
+                        .show_fps(true)
+                        .series("Signal Harmonique", "#00f0ff", &[0.0, 0.4, 0.8, 1.0, 0.7, 0.1, -0.6, -0.9, -0.5, 0.2, 0.7, 0.9, 0.3, -0.4, -0.8]));
+                    b.row(|r| {
+                        r.item(Button::new("btn_sc_webgl_burst").label("🚀 Burst 20 000 Points").primary());
+                        r.item(Button::new("btn_sc_webgl_stream").label("▶ Stream Live 2 000 pts/s").secondary());
+                    });
+                    b.item(PivotTable::new("sc_pivot")
+                        .label("📊 OLAP Multidimensional Pivot Table (Interactive Slice & Dice)")
+                        .headers(&["Country", "Segment", "Quarter", "Revenue (€)", "Margin (€)"])
+                        .data(vec![
+                            vec![serde_json::json!("France"), serde_json::json!("Cloud AI"), serde_json::json!("Q1"), serde_json::json!(42000), serde_json::json!(16000)],
+                            vec![serde_json::json!("France"), serde_json::json!("Edge"), serde_json::json!("Q1"), serde_json::json!(18000), serde_json::json!(7500)],
+                            vec![serde_json::json!("Germany"), serde_json::json!("Cloud AI"), serde_json::json!("Q1"), serde_json::json!(51000), serde_json::json!(22000)],
+                            vec![serde_json::json!("Germany"), serde_json::json!("Edge"), serde_json::json!("Q2"), serde_json::json!(29000), serde_json::json!(11000)],
+                            vec![serde_json::json!("USA"), serde_json::json!("Cloud AI"), serde_json::json!("Q1"), serde_json::json!(95000), serde_json::json!(41000)],
+                            vec![serde_json::json!("USA"), serde_json::json!("Cybersecurity"), serde_json::json!("Q2"), serde_json::json!(64000), serde_json::json!(30000)],
+                        ])
+                        .rows(&["Country", "Segment"])
+                        .cols(&["Quarter"])
+                        .value_field("Revenue (€)")
+                        .aggregator(PivotAggregator::Sum)
+                        .height(300));
                     b.item(DataEditor::new("sc_dataeditor")
                         .label("Interactive Data Grid & Editor (DataEditor: Typed columns, Checkboxes, Ctrl+V TSV/CSV)")
                         .column("id", "ID", ColumnType::Text)

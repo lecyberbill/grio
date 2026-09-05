@@ -111,6 +111,12 @@ pub async fn serve(app: App, addr: String) -> Result<()> {
         .route("/docs", get(docs_page))
         .route("/api/explore", get(explore));
 
+    if server.app.enable_mcp {
+        router = router
+            .route("/mcp/v1", post(mcp_endpoint).get(mcp_discovery))
+            .route("/mcp/tools", get(mcp_tools_list));
+    }
+
     // Register all declared multi-page routes for SPA deep-linking
     for page in &server.app.pages {
         if page.route != "/" {
@@ -143,12 +149,15 @@ pub async fn serve(app: App, addr: String) -> Result<()> {
     eprintln!("  |  UI   ->  http://{host}");
     eprintln!("  |  API  ->  POST http://{host}/api/predict");
     eprintln!("  |       ->  GET  http://{host}/api/schema");
+    if server.app.enable_mcp {
+        eprintln!("  |  MCP  ->  POST http://{host}/mcp/v1 (Claude Desktop / Cursor)");
+    }
     if server.app.enable_docs {
         eprintln!("  |  Docs ->  GET  http://{host}/docs");
         eprintln!("  |       ->  GET  http://{host}/api/openapi.json");
     }
     if server.app.api_key.is_some() {
-        eprintln!("  |  Auth ->  Cle API requise pour /api/predict");
+        eprintln!("  |  Auth ->  Cle API requise pour /api/predict & /mcp/v1");
     }
     eprintln!("  +----------------------------------------------");
     eprintln!(
@@ -335,7 +344,8 @@ fn run_event(
         Some(push.clone()),
         cancel,
         Some(wire.clone()),
-    );
+    )
+    .with_wasm(Arc::clone(&app.wasm_registry));
     let out = process_event(wire, app, &mut ctx);
 
     // Fusionne les nouvelles valeurs dans l'état partagé.
@@ -604,6 +614,7 @@ async fn schema(State(server): State<Arc<AppServer>>) -> Json<Value> {
                 }
             },
             "schema": { "method": "GET", "path": "/api/schema" },
+            "mcp": { "method": "POST", "path": "/mcp/v1" },
             "openapi": { "method": "GET", "path": "/api/openapi.json" },
             "docs": { "method": "GET", "path": "/docs" }
         },
@@ -748,6 +759,85 @@ async fn predict(
         })),
     )
         .into_response()
+}
+
+/// `POST /mcp/v1` — Point d'entrée Model Context Protocol (JSON-RPC 2.0).
+async fn mcp_endpoint(
+    State(server): State<Arc<AppServer>>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<crate::mcp::McpRpcRequest>,
+) -> impl IntoResponse {
+    // Vérification de clé API si requise
+    if let Some(ref required_key) = server.app.api_key {
+        let auth_header = headers
+            .get("X-API-Key")
+            .or_else(|| headers.get("authorization"))
+            .and_then(|v| v.to_str().ok());
+
+        let valid = match auth_header {
+            Some(key) if key == required_key => true,
+            Some(bearer) if bearer.starts_with("Bearer ") && &bearer[7..] == required_key => true,
+            _ => false,
+        };
+
+        if !valid {
+            vlog(
+                &server.app,
+                "[mcp]",
+                "accès refusé (clé API manquante ou invalide)",
+            );
+            return (
+                axum::http::StatusCode::UNAUTHORIZED,
+                Json(crate::mcp::McpRpcResponse::error(
+                    body.id,
+                    -32000,
+                    "Unauthorized — Invalid or missing API key",
+                    None,
+                )),
+            )
+                .into_response();
+        }
+    }
+
+    vlog(
+        &server.app,
+        "[mcp]",
+        &format!("RPC method: '{}'", body.method),
+    );
+
+    let resp = crate::mcp::handle_mcp_request(body, &server.app.title, &server.app.mcp_tools);
+
+    (
+        axum::http::StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
+        Json(resp),
+    )
+        .into_response()
+}
+
+/// `GET /mcp/v1` — Découverte de métadonnées MCP.
+async fn mcp_discovery(State(server): State<Arc<AppServer>>) -> impl IntoResponse {
+    Json(json!({
+        "protocol": "mcp",
+        "version": "2024-11-05",
+        "name": format!("grio-mcp-{}", server.app.title),
+        "tools_count": server.app.mcp_tools.len(),
+        "endpoints": {
+            "rpc": "/mcp/v1",
+            "tools": "/mcp/tools"
+        }
+    }))
+}
+
+/// `GET /mcp/tools` — Liste directe des outils MCP enregistrés.
+async fn mcp_tools_list(State(server): State<Arc<AppServer>>) -> impl IntoResponse {
+    let tools_json: Vec<Value> = server
+        .app
+        .mcp_tools
+        .iter()
+        .map(|t| t.to_mcp_json())
+        .collect();
+    Json(json!({ "tools": tools_json }))
 }
 
 fn role_str(r: Role) -> &'static str {

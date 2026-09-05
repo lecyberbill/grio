@@ -3623,3 +3623,155 @@ body.mg-has-sidebar {
   box-shadow: 0 2px 6px rgba(0,0,0,0.25);
   pointer-events: none;
 }
+
+/* ============================================================
+   Phase 14 — WebGL GPU Plot & OLAP Pivot Table Styles
+   ============================================================ */
+
+.mg-webgl-plot-wrap {
+  position: relative;
+  background: var(--mg-surface);
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-radius);
+  padding: 14px 16px 18px 16px;
+  box-shadow: var(--mg-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.mg-webgl-plot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--mg-border);
+  padding-bottom: 8px;
+}
+
+.mg-webgl-plot-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mg-text);
+  letter-spacing: -0.01em;
+}
+
+.mg-webgl-plot-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mg-webgl-badge-pts {
+  background: rgba(0, 240, 255, 0.12);
+  color: #00d0e0;
+  font-family: var(--mg-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 240, 255, 0.25);
+}
+
+.mg-webgl-badge-fps {
+  background: rgba(0, 255, 102, 0.12);
+  color: #00e65c;
+  font-family: var(--mg-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 255, 102, 0.25);
+}
+
+.mg-webgl-canvas-holder {
+  position: relative;
+  width: 100%;
+  background: #090b10;
+  border-radius: calc(var(--mg-radius) - 4px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.mg-webgl-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.mg-webgl-svg-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* OLAP Pivot Table */
+.mg-pivot-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--mg-surface);
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-radius);
+  padding: 16px;
+  box-shadow: var(--mg-shadow);
+}
+
+.mg-pivot-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  background: var(--mg-surface-2);
+  border: 1px solid var(--mg-border);
+  border-radius: var(--mg-radius-sm);
+  padding: 10px 14px;
+}
+
+.mg-pivot-select-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mg-pivot-select-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mg-muted);
+}
+
+.mg-pivot-table-holder {
+  overflow: auto;
+  border-radius: var(--mg-radius-sm);
+  border: 1px solid var(--mg-border);
+}
+
+.mg-pivot-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.mg-pivot-corner {
+  background: var(--mg-surface-2) !important;
+  font-style: italic;
+  color: var(--mg-muted);
+}
+
+.mg-pivot-row-header {
+  font-weight: 600;
+  background: var(--mg-surface-2);
+}
+
+.mg-pivot-total-col,
+.mg-pivot-total-cell {
+  font-weight: 700;
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--mg-accent);
+}

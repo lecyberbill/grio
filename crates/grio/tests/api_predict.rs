@@ -835,3 +835,185 @@ async fn http_post(url: &str, body: &str, api_key: Option<&str>) -> String {
     stream.read_to_string(&mut resp).await.unwrap();
     resp
 }
+
+#[tokio::test]
+async fn test_phase14_webgl_plot_and_pivot_table() {
+    let app = App::new("Phase 14 Test")
+        .item(
+            WebGlPlot::new("gpu_scope")
+                .title("GPU Waveform")
+                .height(400)
+                .max_points(50_000)
+                .series("Test Series", "#00f0ff", &[1.0, 2.0, 3.5]),
+        )
+        .item(
+            PivotTable::new("sales_cube")
+                .label("Sales Pivot")
+                .headers(&["Country", "Category", "Amount"])
+                .data(vec![
+                    vec![
+                        serde_json::json!("FR"),
+                        serde_json::json!("Tech"),
+                        serde_json::json!(100),
+                    ],
+                    vec![
+                        serde_json::json!("FR"),
+                        serde_json::json!("Tech"),
+                        serde_json::json!(150),
+                    ],
+                    vec![
+                        serde_json::json!("US"),
+                        serde_json::json!("Food"),
+                        serde_json::json!(80),
+                    ],
+                ])
+                .rows(&["Country"])
+                .cols(&["Category"])
+                .value_field("Amount")
+                .aggregator(PivotAggregator::Sum),
+        )
+        .on_submit(|ctx| {
+            let pts = vec![0.1f32, 0.5f32, 0.9f32];
+            ctx.append_f32_points("gpu_scope", &pts);
+            ctx.append_series_points("gpu_scope", 1, &pts);
+            Ok(())
+        });
+
+    let port = 17882;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // Test du schéma OpenAPI et composants
+    let schema = http_get(&format!("http://127.0.0.1:{port}/api/schema")).await;
+    assert!(schema.contains("gpu_scope"));
+    assert!(schema.contains("webgl_plot"));
+    assert!(schema.contains("sales_cube"));
+    assert!(schema.contains("pivot_table"));
+}
+
+#[tokio::test]
+async fn test_phase15_mcp_server_protocol() {
+    let app = App::new("MCP Server Test").mcp(true).mcp_tool(
+        "calculate_area",
+        "Calculate geometric area",
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "width": { "type": "number" },
+                "height": { "type": "number" }
+            },
+            "required": ["width", "height"]
+        }),
+        |args| {
+            let w = args.get("width").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let h = args.get("height").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            Ok(serde_json::json!({ "area": w * h }))
+        },
+    );
+
+    let port = 17883;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // 1. Handshake MCP : initialize
+    let init_resp = http_post(
+        &format!("http://127.0.0.1:{port}/mcp/v1"),
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
+        None,
+    )
+    .await;
+    assert!(init_resp.contains("2024-11-05"));
+    assert!(init_resp.contains("serverInfo"));
+
+    // 2. Découverte d'outils : tools/list
+    let list_resp = http_post(
+        &format!("http://127.0.0.1:{port}/mcp/v1"),
+        r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
+        None,
+    )
+    .await;
+    assert!(list_resp.contains("calculate_area"));
+    assert!(list_resp.contains("Calculate geometric area"));
+
+    // 3. Exécution d'un outil : tools/call
+    let call_resp = http_post(
+        &format!("http://127.0.0.1:{port}/mcp/v1"),
+        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"calculate_area","arguments":{"width":12.0,"height":5.0}}}"#,
+        None,
+    )
+    .await;
+    assert!(call_resp.contains("area"));
+    assert!(call_resp.contains("60"));
+
+    // 4. Découverte REST directe : GET /mcp/tools
+    let direct_tools = http_get(&format!("http://127.0.0.1:{port}/mcp/tools")).await;
+    assert!(direct_tools.contains("calculate_area"));
+}
+
+#[tokio::test]
+async fn test_phase15_wasm_plugin_sandbox() {
+    let mock_plugin = WasmPlugin::new("custom_wasm_filter")
+        .limits(SandboxLimits {
+            max_memory_pages: 64,
+            max_fuel: 1_000_000,
+            timeout_ms: 1000,
+        })
+        .register_method("transform", |bytes| {
+            let input: serde_json::Value = serde_json::from_slice(bytes)?;
+            let msg = input.get("msg").and_then(|v| v.as_str()).unwrap_or("");
+            let out = serde_json::json!({
+                "transformed": format!("[WASM_SECURE: {msg}]"),
+                "bytes_len": msg.len()
+            });
+            Ok(serde_json::to_vec(&out)?)
+        })
+        .register_method("future_unforeseen_method", |_bytes| {
+            // Démonstration d'une méthode non prévue au départ
+            Ok(serde_json::to_vec(&serde_json::json!({ "dynamic_feature": 42 }))?)
+        });
+
+    let app = App::new("WASM Test")
+        .wasm_plugin("filter", mock_plugin)
+        .item(Text::new("raw_in").label("Input").value("test payload"))
+        .item(Output::new("processed_out").label("Output"))
+        .on_submit(|ctx| {
+            let raw: String = ctx.get("raw_in")?;
+            let res = ctx.call_wasm("filter", "transform", &serde_json::json!({ "msg": raw }))?;
+            let out_str = res["transformed"].as_str().unwrap_or("").to_string();
+            ctx.set("processed_out", out_str);
+            Ok(())
+        });
+
+    let port = 17884;
+    let addr = format!("127.0.0.1:{port}");
+    let addr_clone = addr.clone();
+
+    tokio::spawn(async move {
+        let _ = app.serve(addr_clone).await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // Test predict déclenchant le handler appelant le plugin WASM
+    let resp = http_post(
+        &format!("http://127.0.0.1:{port}/api/predict"),
+        r#"{"data":["hello from client"]}"#,
+        None,
+    )
+    .await;
+
+    assert!(resp.contains("[WASM_SECURE: hello from client]"));
+}
+

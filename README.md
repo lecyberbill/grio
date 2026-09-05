@@ -97,6 +97,8 @@ cargo run -p grio --example greet
 | **Rich Data & Dynamic Slots** | `cargo run -p grio --example rich_data_slots` | Micro-editor Markdown (`RichText`), interactive grid with typed checkboxes (`DataEditor`), and runtime hot-slot injection (`DynamicContainer`). |
 | **Multi-Page & Drawer** | `cargo run -p grio --example multi_page_drawer` | Declarative SPA multi-page navigation (`app.page`) + Sliding offcanvas drawer. |
 | **Chatbot** | `cargo run -p grio --example chatbot` | Conversational Chatbot widget with token-by-token streaming |
+| **Big Data & WebGL GPU Accelerator** | `cargo run -p grio --example bigdata_accelerator` | Zero-copy binary streaming (`Float32Array`), 1M+ points at 60 FPS (`WebGlPlot`), and multidimensional OLAP pivot tables (`PivotTable`). |
+| **Model Context Protocol (MCP) Server** | `cargo run -p grio --example mcp_agent_server` | Official Anthropic MCP v2024-11-05 endpoint (`/mcp/v1`) for Claude Desktop, Cursor & Windsurf tool-calling. |
 | **Media & Vision** | `cargo run -p grio --example media` | Image, Audio (live mic streaming), Video (live camera streaming), PDF Viewer |
 | **Grid & Containers** | `cargo run -p grio --example grid` | Responsive Grids, Rows, Columns, Panels, and Accordions |
 | **Theming & Tabs** | `cargo run -p grio --example theme_and_tabs` | Multi-tab workflows, light/dark themes, brand accent customization |

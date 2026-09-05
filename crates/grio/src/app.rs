@@ -244,6 +244,12 @@ pub struct App {
     pub theme: Theme,
     /// Largeur maximale du conteneur de l'application (ex: 1200px).
     pub max_width: Option<u32>,
+    /// Outils enregistrés pour le protocole Model Context Protocol (MCP `/mcp/v1`).
+    pub mcp_tools: Vec<crate::mcp::McpTool>,
+    /// Active le serveur Model Context Protocol (MCP) pour Claude Desktop / Cursor.
+    pub enable_mcp: bool,
+    /// Registre de plugins WebAssembly (Phase 15.3).
+    pub wasm_registry: std::sync::Arc<crate::wasm::WasmRegistry>,
 }
 
 /// Collecteur d'éléments pour une page dans une application multi-pages.
@@ -513,7 +519,31 @@ impl App {
             isolated_sessions: true,
             theme: Theme::default(),
             max_width: None,
+            mcp_tools: Vec::new(),
+            enable_mcp: true,
+            wasm_registry: std::sync::Arc::new(crate::wasm::WasmRegistry::new()),
         }
+    }
+
+    /// **Enregistre un greffon WebAssembly** : associe une instance de plugin WASM
+    /// sandboxé à un identifiant unique utilisable dans les handlers via `ctx.call_wasm`.
+    ///
+    /// ```rust
+    /// # use grio::*;
+    /// # fn example() {
+    /// let plugin = WasmPlugin::new("moderator");
+    /// let app = App::new("Demo").wasm_plugin("mod", plugin);
+    /// # }
+    /// ```
+    pub fn wasm_plugin(mut self, id: impl Into<String>, plugin: crate::wasm::WasmPlugin) -> Self {
+        if let Some(reg) = std::sync::Arc::get_mut(&mut self.wasm_registry) {
+            reg.register(id, plugin);
+        } else {
+            let mut reg = (*self.wasm_registry).clone();
+            reg.register(id, plugin);
+            self.wasm_registry = std::sync::Arc::new(reg);
+        }
+        self
     }
 
     /// Déclare une page dans une application multi-pages.
@@ -574,6 +604,53 @@ impl App {
     pub fn tabs(mut self, task: impl FnOnce(Tabs) -> Tabs) -> Self {
         let t = task(Tabs::new(format!("tabs-{}", self.root.children().len())));
         self.root.push(Box::new(t));
+        self
+    }
+
+    /// Enregistre un outil pour le protocole Model Context Protocol (MCP `/mcp/v1`).
+    ///
+    /// Permet à Claude Desktop, Cursor et Windsurf d'appeler directement cet outil.
+    ///
+    /// ```rust
+    /// # use grio::*;
+    /// # fn example() -> App {
+    /// App::new("AI Hub")
+    ///     .mcp_tool(
+    ///         "query_db",
+    ///         "Execute analytical SQL query on data warehouse",
+    ///         serde_json::json!({
+    ///             "type": "object",
+    ///             "properties": {
+    ///                 "sql": { "type": "string", "description": "SQL query to execute" }
+    ///             },
+    ///             "required": ["sql"]
+    ///         }),
+    ///         |args| {
+    ///             let sql = args.get("sql").and_then(|v| v.as_str()).unwrap_or("");
+    ///             Ok(serde_json::json!({ "status": "ok", "rows": 42, "executed": sql }))
+    ///         }
+    ///     )
+    /// # }
+    /// ```
+    pub fn mcp_tool(
+        mut self,
+        name: impl Into<String>,
+        description: impl Into<String>,
+        input_schema: Value,
+        handler: impl Fn(Value) -> Result<Value> + Send + Sync + 'static,
+    ) -> Self {
+        self.mcp_tools.push(crate::mcp::McpTool::new(
+            name,
+            description,
+            input_schema,
+            handler,
+        ));
+        self
+    }
+
+    /// Active ou désactive le serveur Model Context Protocol (`/mcp/v1`).
+    pub fn mcp(mut self, enable: bool) -> Self {
+        self.enable_mcp = enable;
         self
     }
 

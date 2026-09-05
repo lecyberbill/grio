@@ -88,6 +88,11 @@ pub fn inspect(data_url: &str) -> Option<MediaInfo> {
     })
 }
 
+/// Encode des octets en chaîne base64 standard.
+pub fn encode(bytes: &[u8]) -> String {
+    base64::engine::general_purpose::STANDARD.encode(bytes)
+}
+
 /// Décode des données base64 (URL-safe accepté).
 pub fn decode(b64: &str) -> Option<Vec<u8>> {
     base64::engine::general_purpose::STANDARD

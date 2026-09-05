@@ -33,12 +33,13 @@ pub mod app;
 pub mod components;
 pub mod context;
 pub mod events;
+pub mod mcp;
 pub mod media;
 pub mod server;
 pub mod showcase;
+pub mod wasm;
 
 pub use ai::{Llm, LlmProvider};
-
 pub use app::{App, PageBuilder, PageDef, Theme, ThemeMode};
 pub use components::{
     Accordion, AnnotatedImage, Audio, AudioRecorder, BoundingBox, Button, ChatMessage, Chatbot,
@@ -46,13 +47,16 @@ pub use components::{
     Dataframe, DatePicker, DownloadButton, Drawer, Dropdown, DynamicContainer, Explorer, File,
     Gallery, GraphEdge, GraphNode, Grid, HighlightedText, Html, Image, ImageComparison,
     ImageEditor, IntoBox, Json, Label, Layout, Map, MapCircle, MapMarker, Markdown, Metric,
-    Model3D, NodeGraph, NodeSocket, Number, Output, Panel, Pdf, PdfHighlight, Plot, Progress,
-    Radio, RichText, Role, Row, SectionBuilder, Slider, SliderRange, SortableList, Tabs, Text,
-    TextSegment, TimePicker, Timer, Video, WithLayout,
+    Model3D, NodeGraph, NodeSocket, Number, Output, Panel, Pdf, PdfHighlight, PivotAggregator,
+    PivotTable, Plot, Progress, Radio, RichText, Role, Row, SectionBuilder, Slider, SliderRange,
+    SortableList, Tabs, Text, TextSegment, TimePicker, Timer, Video, WebGlPlot, WebGlSeries,
+    WithLayout,
 };
 pub use context::{AlertLevel, Context};
 pub use events::EventName;
+pub use mcp::{McpResource, McpRpcError, McpRpcRequest, McpRpcResponse, McpTool};
 pub use media::{MediaInfo, StreamInfo};
+pub use wasm::{PluginManifest, SandboxLimits, WasmPlugin, WasmRegistry};
 
 /// Erreur levée par le moteur (contenu libre, généralement une chaîne).
 pub type Error = Box<dyn std::error::Error + Send + Sync>;

@@ -67,6 +67,7 @@ pub struct Context {
     skipped: HashSet<String>,
     all: Vec<(String, Value)>,
     emitted: Vec<(String, Value)>,
+    wasm: Arc<crate::wasm::WasmRegistry>,
 }
 
 impl Context {
@@ -86,7 +87,13 @@ impl Context {
             skipped: HashSet::new(),
             all: Vec::new(),
             emitted: Vec::new(),
+            wasm: Arc::new(crate::wasm::WasmRegistry::new()),
         }
+    }
+
+    pub(crate) fn with_wasm(mut self, wasm: Arc<crate::wasm::WasmRegistry>) -> Self {
+        self.wasm = wasm;
+        self
     }
 
     /// Événement d'origine de la passe (si la passe vient d'un événement
@@ -267,6 +274,61 @@ impl Context {
         }));
     }
 
+    /// **Streaming binaire direct / WebGL & Arrow** : injecte un flux binaire brut
+    /// sans aucune sérialisation JSON via WebSocket (zéro copie côté GPU).
+    ///
+    /// ```rust
+    /// # use grio::*;
+    /// # fn example(ctx: &mut Context) {
+    /// let samples: Vec<f32> = (0..10_000).map(|i| (i as f32 * 0.05).sin()).collect();
+    /// ctx.append_f32_points("gpu_chart", &samples);
+    /// # }
+    /// ```
+    pub fn append_binary(&mut self, id: impl Into<String>, data: &[u8]) {
+        let id = id.into();
+        let b64 = crate::media::encode(data);
+        self.send(json!({
+            "t": "bin",
+            "c": id,
+            "b64": b64,
+        }));
+    }
+
+    /// **Streaming haute fréquence f32** : transmet un tableau continu d'échantillons `f32`
+    /// directement interprétable comme un `Float32Array` WebGL côté navigateur.
+    pub fn append_f32_points(&mut self, id: impl Into<String>, points: &[f32]) {
+        let bytes: &[u8] = unsafe {
+            std::slice::from_raw_parts(
+                points.as_ptr() as *const u8,
+                points.len() * std::mem::size_of::<f32>(),
+            )
+        };
+        self.append_binary(id, bytes);
+    }
+
+    /// **Streaming multi-séries WebGL** : pousse des points étiquetés par série.
+    pub fn append_series_points(
+        &mut self,
+        id: impl Into<String>,
+        series_index: u32,
+        points: &[f32],
+    ) {
+        let id = id.into();
+        let bytes: &[u8] = unsafe {
+            std::slice::from_raw_parts(
+                points.as_ptr() as *const u8,
+                points.len() * std::mem::size_of::<f32>(),
+            )
+        };
+        let b64 = crate::media::encode(bytes);
+        self.send(json!({
+            "t": "bin_series",
+            "c": id,
+            "s": series_index,
+            "b64": b64,
+        }));
+    }
+
     /// **Streaming** : ajoute un fragment à la valeur d'un composant
     /// (les fragments sont concaténés côté client). Poussé immédiatement,
     /// uniquement en temps réel — absent de la réponse finale.
@@ -313,6 +375,32 @@ impl Context {
             "radius": theme.radius,
             "font": theme.font,
         }));
+    }
+
+    /// **Exécution sandboxée d'un greffon WebAssembly** : invoque une fonction
+    /// exposée par un plugin WASM enregistré avec passage de charge utile JSON.
+    ///
+    /// ```rust
+    /// # use grio::*;
+    /// # fn example(ctx: &mut Context) -> grio::Result<()> {
+    /// let res = ctx.call_wasm("text_moderator", "filter", &serde_json::json!({ "text": "bonjour" }))?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn call_wasm(&self, plugin_id: &str, method: &str, input: &Value) -> Result<Value> {
+        let plugin = self.wasm.get(plugin_id).ok_or_else(|| {
+            Error::from(format!("plugin WebAssembly `{plugin_id}` introuvable dans le registre"))
+        })?;
+        plugin.call(method, input)
+    }
+
+    /// **Exécution binaire directe d'un greffon WebAssembly** : invoque une fonction
+    /// bas niveau avec des tampons d'octets sans overhead de sérialisation JSON.
+    pub fn call_wasm_bytes(&self, plugin_id: &str, method: &str, input: &[u8]) -> Result<Vec<u8>> {
+        let plugin = self.wasm.get(plugin_id).ok_or_else(|| {
+            Error::from(format!("plugin WebAssembly `{plugin_id}` introuvable dans le registre"))
+        })?;
+        plugin.invoke_bytes(method, input)
     }
 
     /// `true` si le job courant a été annulé (nouveau déclenchement sur la
